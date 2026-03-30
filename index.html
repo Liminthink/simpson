@@ -192,13 +192,13 @@ for (const {segment: w, isWordLike} of segments) {
 }
 
 // 3. 转化为 ECharts 词云/柱状图格式
-wd = Object.entries(wf).map(([name, value]) => ({ name, value })).slice(0, 16);
+wd = Object.entries(wf).slice(0, 16).map(([name, value]) => ({ name, value }));
 }    
     wc.setOption({
       title: { text: `${pr.name} 推文词云`, left: 'center', textStyle: { color: tc, fontSize } },
       tooltip: { show: true },
       series: [{ type: 'wordCloud', shape: 'rect', sizeRange: [12, 55], rotationRange: [-45, 45], textStyle: { color: () => '#' + Math.floor(Math.random() * 16777215).toString(16) }, data: wd }]
-    }, true)
+    }, )
 
 if (XX&2**1) {
   // 聚合各个省份的热度 (c 是 loc 按空格切割的第一部分)
@@ -430,7 +430,7 @@ excelForm(location.hash)
   season=[0, 90, 181, 273][k]
 })
 
-if(!kCsv) location.reload(location='#261A01')
+if(!kCsv) location.reload(location='#262A19')
 </script>  
 
 </body>
