@@ -1,439 +1,890 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <meta charset="utf-8">
-  <title>WHYO: 李老师推特热点地图</title>
+  <meta charset="utf-8" />
+  <title>WHYO | 中国维权时局图</title>
+  <meta name="description" content="《雪花周报》是 X.com 中文大V李老师推文的省份、城市、话题数据可视化，归档了历年爆料的文本和时间趋势。">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-boundary-canvas@1.0.0/src/BoundaryCanvas.min.js"></script>
+  <script src="https://unpkg.com/@antv/l7@2.9.0/dist/l7.js"></script>
+
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/echarts/map/js/china.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/2.3.1/list.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+
+  <link type="text/css" rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/dist/css/goldenlayout-base.css" />
+  <link type="text/css" rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/dist/css/themes/goldenlayout-dark-theme.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js"></script>
+
   <style>
-body{margin: 0; overflow:hidden}
+    body {
+      margin: 0;
+      padding: 0;
+    }
 
-main article, #tbl { height: 100vh; }
-article { display: flex; flex-direction: column; position: relative; overflow: hidden; }
-#tbl { display:block; overflow-y: scroll; }
-.rt { position: absolute; top: 20px; right: 20px; padding: 8px 16px; border: none; border-radius: 4px;}
-#b{ cursor: pointer; z-index: 99; transition: 0.3s; font-weight: bold; }    
+    #map {
+      height: 100vh;
+    }
 
-/* 地图占上半部分，支持垂直缩放 */
-#m { width: 100%; height: 60%; resize: vertical; overflow: hidden;  flex-shrink: 0; }
-/* 下方分栏视图 */
-#c { display: flex; flex: 1; min-height: 0; background:#9E9E9E}
-.dark #c {background:#181b38}
-body:has(.dark){background:#323553}
-/* 词云支持水平缩放 */
-#wc { width: 50%; resize: horizontal; overflow: hidden; flex-shrink: 0; }
-/* 排行榜与饼图平分剩余空间 */
-#bar, #pie { flex: 1; min-width: 0; }
+    filter#hue-grep1 {
+      --bg: #f2efe9;
+      --bg-bad: rgb(183, 213, 169);
+    }
 
-#grd {
-  height: 100vh; display: grid;
-  grid-template-columns: repeat(2, 1fr); /* 2列 */
-  grid-template-rows: repeat(2, 1fr);    /* 2行 */
-  gap: 14px;                             /* 较大的间距更有呼吸感 */
-  padding: 24px;
-    box-sizing: border-box;
-}
+    filter#hue-grep2 {
+      --bg: #f2efe9;
+      --bg-bad: rgb(167 214 227);
+    }
 
-#grd article:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  transform: translateY(-4px);
-  transition: all 0.3s cubic-bezier(0.25, 1, 0.3, 1);
-}
+    filter#hue-grep3 {
+      --bg: #fcf9f2;
+      --bg-bad: #a3ccff;
+    }
 
-/* 评论区样式核心 */
-.list { list-style: none; padding: 0; }
-.item { backdrop-filter: sepia(1); padding: 20px; margin-bottom: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-.meta { color: #888; font-size: 16px; margin-bottom: 8px; display: flex; gap: 12px; }
-.heat { color: #57ebe4; font-weight: bold; }
-.type { background: #fef2f2; padding: 2px 6px; border-radius: 4px; }
-.bg { font-weight: bold; font-size: 15px; margin-bottom: 6px; color: #333; }
-.desc { font-size: 24px; line-height: 1.6; color: #aaa; }
+    .b-box {
+      height: 100%;
+      box-shadow: inset -5px -3px 20px 2px #0089ff1a;
+    }
 
-/* 默认的弹簧/线性动画可能不够柔和，我们可以定制 hero-article 的过渡 */
-::view-transition-group(hero) {
-  animation-duration: 0.4s;
-  animation-timing-function: cubic-bezier(0.25, 1, 0.3, 1); /* 更丝滑的缓动曲线 */
-}
+    .leaflet-interactive {
+      transition: fill-opacity 0.3s ease, fill 0.3s ease, stroke-width 0.3s ease;
+      transition-timing-function: cubic-bezier(0.25, 1, 0.3, 1);
+    }
+
+    .pnt {
+      font: 20px sans;
+    }
+
+    #map[dark="darker"] {
+      /* 反转颜色，调整亮度和对比度，使其看起来像夜间地图 */
+      filter: url(#hue-grep1) url(#hue-grep3) url(#hue-grep2) invert(100%) hue-rotate(180deg) brightness(1.3) contrast(1.1);
+    }
+
+    #map[dark="darker"] .pnt {
+      filter: hue-rotate(-180deg) invert(0.8);
+    }
+
+
+    #map[dark="green"] {
+      /* 强行去色 */
+      filter: none;
+    }
+
+    #map[dark="dark"] {
+      filter: url(#hue-grep1) url(#hue-grep2) brightness(0.6) contrast(1.4) hue-rotate(355deg);
+    }
+  </style>
+
+  <style>
+    body,
+    html {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #0b0d11;
+    }
+
+    /* 布局容器填满视口 */
+    #layoutContainer {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* 自定义组件内部样式，使其符合图片中的微发光暗黑风 */
+    .component-container {
+      width: 100%;
+      height: 100%;
+      padding: 15px;
+      color: #dbdfdf;
+      font-family: monospace;
+      background: #14171c;
+      overflow: auto;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background-color: #aad3df !important;
+      object-fit: cover;
+      filter: url(#hue-grep1) url(#hue-grep3);
+      /* 模拟科技感冷色调 */
+    }
+
+    .l7-ctrl-logo {
+      display: none
+    }
+
+    #icTalk {
+      bottom: 0;
+      left: 0;
+      position: fixed;
+      opacity: 0.7;
+      mix-blend-mode: multiply;
+      filter: contrast(1.5) sepia(0);
+      transition: .7s filter, .1s translate;
+    }
+
+    #icTalk:hover {
+      filter: contrast(1) sepia(1);
+      translate: 5px 0;
+    }
+
+    #lst {
+      width: 100%;
+      height: 100%;
+      background: #101216;
+      border: 1px dashed #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+    }
+
+    /* 评论区样式核心 */
+    .list {
+      list-style: none;
+      padding: 0;
+      overflow-y: scroll;
+      height: 100%;
+    }
+
+    .item {
+      backdrop-filter: sepia(1);
+      padding: 9px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .meta {
+      color: #888;
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .heat {
+      color: #57ebe4;
+      font-weight: bold;
+    }
+
+    .type {
+      background: #fef2f2;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .bg {
+      font-weight: bold;
+      font-size: 15px;
+      margin-bottom: 6px;
+      color: #333;
+    }
+
+    .desc {
+      font-size: 24px;
+      line-height: 1.6;
+      color: #aaa;
+    }
   </style>
 </head>
-<body>
-<main id=main></main>
-<div id=grd>
-  <article id=a0>
-    <button id="b" class="rt"></button>
-    <div id="m"></div>
-    <div id="c">
-      <div id="wc" class="b-box"></div>
-      <div id="bar" class="b-box"></div>
-      <div id="pie" class="b-box"></div>
-    </div>
-  </article>
 
-</div>
-<article id=tbl>
-  <ul class="list"></ul>
-  <div class="rt">
-    <input class="search" placeholder="搜索地域、内容或类型..." />
-    <a class="sort type" data-sort="heat">冰感📈</a>
-    <a class="sort type" data-sort="loc">地域📈</a>
+<body>
+
+  <div id="map"><img id=icTalk width=100
+      src=https://pbs.twimg.com/profile_images/2004720683905904640/8ZEZs67v_400x400.jpg></div>
+
+  <script>onload = (() => {
+      // 1. 初始化地图
+      only1(nv1, tog(`bg-[#112a1e] border border-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.2)]`))
+      document.styleSheets.onAdd()
+      let [f11, { children: [dark] }, num, share, { children: [_ic, srch] }, tbl] = nv2.children
+      share.onclick = () => alert('链接已复制！')
+      f11.onclick = () => map.requestFullscreen().then(() => gui.updateSize())
+      dark.onchange = () => { if (dark.value != 'globe') { map.setAttribute('dark', dark.value) } else { map.innerHTML = ''; globe(); dark.value = 'darker' } }
+      tbl.onclick = () => togMap()
+      num.onclick = () => togMap(0b1)
+      srch.onchange = () => seeAll(p.filter(u => u.desc.includes(srch.value)))
+
+      let viz = document.querySelectorAll('.b-box'),
+        obs = new ResizeObserver(es => es.forEach(e => {
+          echarts.getInstanceByDom(e.target)?.resize()
+          let w = e.contentRect.width
+          if (e.target.id == 'wc') wc.setOption({ series: [{ type: 'wordCloud', sizeRange: [w / 10, w / 4] }] })
+        }))
+      viz.forEach(x => { obs.observe(x); window[x.id] = echarts.init(x) })
+
+
+      readTwit(p = [], csvs[0])
+
+      const map1 = MapRect('map', id => {
+      }, seeAll = k => {
+        let a = k.substr ? p.filter(u => u.loc.includes(k)) : k
+        num.innerText = a.length
+        seeCmt(a)
+        seeTop(a)
+        seeWeek(a)
+        seeWd(a.map(u => u.desc).join(''), k.substr ? k : `手气不错`)
+      }, (k, v, n) => {
+        if (!(n = city[k])) { return }
+        v.setStyle({
+          fillOpacity: 0.7
+        })
+        v.bindTooltip(`<b>${k}</b><br>当前总热度: ${n}`)
+      }),
+
+        city =
+          _.chain(p)
+            .groupBy(item => item.loc.split(' ')[1]) // 按省份分组
+            .mapValues(items => _.sumBy(items, 'heat')).value();
+
+      // 2. 调用map函数，绘制数据
+      map1([
+        ['南京 江苏', 'id-nanjing'],
+        ['北京', 'id-beijing'],
+        ['乌鲁木齐 新疆', 'id-urumqi']
+      ]);
+
+      cityData(p, map1)
+
+    })</script>
+
+
+  <!-- 步骤1: 模拟从外部JS文件 <script src=".../china-cities-db.js"></script> 加载城市坐标数据 -->
+  <script>
+    let CHINA_CITIES_DB = {
+      '北京': [39.90, 116.40], '上海': [31.23, 121.47], '广州': [23.12, 113.26],
+      '深圳': [22.54, 114.05], '成都': [30.57, 104.06], '杭州': [30.27, 120.15],
+      '武汉': [30.59, 114.30], '西安': [34.26, 108.95], '南京': [32.06, 118.78],
+      '重庆': [29.56, 106.55], '拉萨': [29.64, 91.11], '哈尔滨': [45.75, 126.63], '天津': [39.12, 117.20],
+      '香港': [22.31, 114.17], '澳门': [22.19, 113.54], '大理': [25.61, 100.27], '乌鲁木齐': [43.82, 87.61]
+    };
+
+    let tog = (cs) => e => cs.split(' ').map(s => e.classList.toggle(s)),
+      only1 = (e0, op, i = 0, cs = e0.children) => (e0.onclick = ev => { if (!i.nodeType) { op(i = cs[i]); return } op(i); op(i = ev.target) })(),
+      findAll = (obj, is) => (typeof obj == 'object') ? [...(is(obj) ? [obj] : []), ..._.flatMap(obj, v => findAll(v, is))] : [];
+
+    document.styleSheets.onAdd = () => [...document.styleSheets].flatMap(u => { try { return [...u.rules] } catch { } }).forEach((u, _, m, e, e0) => {
+      if (m = /^filter#(\D+?)(\d+)/.exec(u?.selectorText)) {
+        e0 = cssSvg.querySelector(`#${m[1]}0`); e = e0.cloneNode(true); e.id = m[1] + m[2];
+        e0.parentNode.append(e)
+      }
+    })
+
+
+
+      + async function initCityDB() {
+        const res = await fetch('https://unpkg.com/province-city-china@latest/dist/city.json').then(r => r.json());
+
+        // 一行代码：分组、映射、并把 "lng,lat" 字符串反转为 [lat, lng] 数字数组
+        //CHINA_CITIES_DB = _.pickBy(_.mapValues(_.keyBy(res, 'name'), c => c.location ? _.map(c.location.split(','), Number).reverse() : null));
+
+      }()
+
+    csvs =
+      `武汉 湖北,维权,2209,2024-05-04,and,3月8日，湖北省武汉市，武汉市“江油”国控市政建设集团有限公司承建江油乡村振兴江油农民就业基地（一期）“江油”市B地块,一期一标段，居民聚集维权。居民反映：电池厂的建造选址就位于小区旁边隔壁200米。
+黄冈 湖北,投诉,1450,2024-05-05,and,黄冈市罗田县居民反映自来水浑浊问题，要求相关部门尽快解决水质安全。
+襄阳 湖北,维权,800,2024-05-06,and,襄阳市樊城区某楼盘延期交房，业主集体要求退房赔偿。
+长沙 湖南,求助,1200,2024-05-07,and,长沙某校学生求助，关于住宿费退费流程不透明。
+呼和浩特 内蒙古,建议,300,2024-05-08,and,市民建议增加共享单车投放点。
+台北 台湾,维权,500,2024-05-09,and,市民抗议公共设施老化问题。
+成都 四川,维权,2100,2024-05-12,and,成都市高新区某长租公寓爆雷，租客和房东聚集要求退还押金和租金。
+杭州 浙江,建议,650,2024-05-13,and,市民建议在地铁换乘站增加无障碍电梯，方便老年人和残障人士出行。
+西安 陕西,求助,900,2024-05-14,and,未央区部分老旧小区近期停水停电频发，居民求助解决基础设施老化问题。
+深圳 广东,投诉,1500,2024-05-19,and,多名外卖骑手投诉平台随意扣罚派送费，要求优化派单和考核算法。
+合肥 安徽,求助,400,2024-05-20,and,部分高校应届毕业生求助，称被某科技公司试用期无故辞退且未给任何补偿。
+南京 江苏,建议,750,2024-05-21,and,市民建议增加灵活就业人员的社保补贴渠道和线下办理网点。
+北京 北京,维权,2800,2024-05-25,and,海淀区某知名连锁早教机构突然闭店跑路，家长集体登记要求退还预交学费。
+上海 上海,投诉,1350,2024-05-26,and,多名消费者集中投诉某电商平台大促期间“先涨后降”，涉嫌虚假宣传和价格欺诈。
+武汉 湖北,求助,600,2024-05-27,and,大学生求助，在二手交易平台购买电子产品遭遇连环诈骗，希望相关部门加快处理。
+济南 山东,建议,450,2024-05-28,and,家长建议市场监管局规范中小学周边文具店售卖的“盲盒”类产品，避免诱导未成年人消费。
+重庆 重庆,投诉,1100,2024-05-29,and,渝北区居民反映某化工厂夜间疑似偷排废气，导致周边空气经常伴有刺鼻异味。
+苏州 江苏,建议,850,2024-05-30,and,市民建议在早晚高峰时段增加工业园区主干道的公交车班次，缓解通勤拥堵。
+大连 辽宁,维权,1600,2024-05-31,and,某小区地下车库因暴雨倒灌导致多辆私家车受损，业主联名要求物业公司承担赔偿责任。
+昆明 云南,求助,500,2024-04-01,and,部分农户求助，近期极端冰雹天气导致花卉等经济作物受损严重，希望能申请农业防灾减灾补贴。
+`.split('\n--\n')
+  </script>
+
+  <nav>
+    <div
+      class="w-full h-12 bg-[#0d0f12] border border-[#1f242e] px-4 py-2 flex items-center justify-between text-xs font-mono select-none rounded">
+
+      <div id=nv1 class="flex items-center space-x-1 bg-[#161a22] border border-[#242b38] p-1 rounded">
+        <button
+          class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
+          🌍世界
+        </button>
+        <button
+          class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
+          📱科技
+        </button>
+        <button
+          class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
+          🌻Good News
+        </button>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <span class="text-white font-black tracking-widest text-sm"
+          style="font-family: 'Courier New', Courier, monospace;">WHYO WEEKLY</span>
+        <span class="text-gray-500 text-[10px]">v2.1</span>
+        <span class="text-gray-500 text-[10px]">@WhyYou<u><a target=_blank
+              href=https://x.com/whyyoutouzhele/media>touzhele</a></u></span>
+        <span
+          class="bg-[#e11d48] text-white font-extrabold px-1.5 py-0.5 rounded text-[10px] tracking-tight border border-[#fb7185] shadow-[0_0_10px_rgba(225,29,72,0.4)]">
+          2026A103
+        </span>
+      </div>
+
+      <div id=nv2 class="flex items-center space-x-2">
+        <span class="text-white">⛶</span>
+
+        <div
+          class="relative flex items-center bg-[#161a22] border border-[#2e374a] rounded px-2 py-1 text-gray-300 hover:bg-[#202734] transition-colors">
+          <select class="bg-transparent outline-none text-xs cursor-pointer appearance-none pr-4">
+            <option value="white" class="bg-[#161a22] text-gray-300">白</option>
+            <option value="darker" class="bg-[#161a22] text-gray-300">墨</option>
+            <option value="dark" class="bg-[#161a22] text-gray-300">黑</option>
+            <option value="green">绿</option>
+            <option value="globe">3D</option>
+          </select>
+          <span class="absolute right-2 text-[8px] text-gray-500 pointer-events-none">▼</span>
+        </div>
+
+        <div
+          class="bg-[#eab308] text-black font-black rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
+          23</div>
+
+        <button
+          class="flex items-center bg-[#161a22] border border-[#2e374a] px-2 py-1 rounded text-gray-300 gap-1 hover:bg-[#202734] cursor-pointer">
+          <span class="text-blue-400">🔀</span> 分享
+        </button>
+
+        <div class="relative flex items-center">
+          <span class="absolute left-2 text-gray-400">🔍</span>
+          <input type="search" placeholder="搜索..."
+            class="bg-[#161a22] border border-[#2e374a] pl-7 pr-2 py-1 rounded text-gray-300 placeholder-gray-500 outline-none w-28 focus:border-blue-500 focus:shadow-[0_0_8px_rgba(59,130,246,0.3)] transition-all text-xs">
+        </div>
+
+        <button
+          class="flex items-center bg-[#13233c] border border-[#2563eb] px-2 py-1 rounded text-[#60a5fa] gap-1 hover:bg-[#1a3358] cursor-pointer">
+          <span>🔄</span> 文字视图
+        </button>
+      </div>
+    </div>
+  </nav>
+  <div id="layoutContainer"></div>
+  <ul id=talk class="list"></ul>
+  <div id="c">
+    <div id="wc" class="b-box"></div>
+    <div id="bar" class="b-box"></div>
+    <div id="pie" class="b-box"></div>
+    <div id="tops" class="b-box"></div>
+    <div id="liner" class="b-box"></div>
   </div>
-  <img height="100%">
-</article>
+  <script type="module">
+    // 直接从 CDN 导入标准的 ES 模块，彻底解决全局变量未定义问题
+    import { GoldenLayout } from 'https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/+esm';
+    navigator.iOS = !matchMedia("(orientation: landscape)").matches
+
+    window.togMap = (id) => {
+      let [c1, c2] = gui.root.contentItems[0].contentItems[0].contentItems
+      if (id == 1) { c2.toggleMaximise(); return }
+      c1.size = togMap.i++ % 2 ? (100 - togMap.L) : togMap.L
+      c2.size = 100 - c1.size
+      gui.updateSize()
+    }
+    togMap.i = 0
+    togMap.L = navigator.iOS ? 65 : 20
+    // 配置结构保持不变
+    let deskUI = {
+      type: 'column',
+      width: 30,
+      content: [
+        {
+          type: 'stack',
+          height: 20,
+          content: [
+            { type: 'component', componentType: 'tops-component', title: '事件类型榜' },
+            { type: 'component', componentType: 'pie-component', title: '讨论热度榜', componentState: { text: '📊 综合置信度指数：88%' } },
+            { type: 'component', componentType: 'text-component', title: 'AI 周度分析', componentState: { text: '📈 预测：该区域未来 48 小时冲突概率上升至 14%。' } },
+          ]
+        },
+        {
+          type: 'stack',
+          height: 50,
+          content: [{
+            type: 'component',
+            componentType: 'wc-component',
+            title: '⚡ 热度词云',
+          },
+          { type: 'component', componentType: 'aigc-component', title: '🤖 话题洞察' },
+          ]
+        },
+        {
+          type: 'component',
+          componentType: 'liner-component',
+          height: 30,
+          title: '📰 本周情报总数',
+        }
+      ]
+    }
+    const
+      config = {
+        settings: { showPopoutIcon: false, },
+        root: {
+          type: 'row',
+          content: [
+            {
+              type: 'column',
+              width: 70,
+              content: [
+                {
+                  type: 'component',
+                  componentType: 'map-component',
+                  height: 80,
+                  title: '🗺️ 舆情态势感知中心'
+                },
+                {
+                  type: 'stack',
+                  height: togMap.L, content: deskUI.e0 = [
+                    {
+                      type: 'component',
+                      componentType: 'talk-component',
+                      height: 20,
+                      title: '📋 推文大数据'
+                    }]
+                }
+              ]
+            },
+            ...(navigator.iOS ? [] : [deskUI])
+          ]
+        }
+      };
+
+    navigator.iOS && deskUI.e0.push(...findAll(deskUI, u => _.has(u, 'componentType')))
+
+    const container = document.getElementById('layoutContainer');
+
+    // 注意：这里直接 new 导入的 GoldenLayout，不再需要前缀
+    window.gui = new GoldenLayout(container)
+    let reg = (id) =>
+      gui.registerComponentFactoryFunction(id + '-component', function (container) {
+        container.element.append(document.getElementById(id))
+      });
+    reg('map')
+
+    reg('talk')
+    reg('wc')
+    reg('liner')
+    reg('tops')
+    reg('pie')
+    reg('aigc')
+
+
+    gui.registerComponentFactoryFunction('text-component', function (container, itemConfig) {
+      const state = itemConfig.componentState || {};
+      container.element.innerHTML = `
+            <div class="component-container">
+                <img src="a.png" onclick="seeAll(p.slice(0,p.length*Math.random()))">
+            </div>
+        `;
+    });
+
+    // 渲染布局
+    gui.loadLayout(config);
+
+    // 自适应缩放
+    window.addEventListener('resize', () => {
+      gui.updateSize();
+    });
+  </script>
+  <svg id=cssSvg>
+    <defs>
+      <filter id="hue-grep0" color-interpolation-filters="sRGB">
+        <feFlood style="flood-color: var(--bg-bad, #000);" result="targetColor" />
+        <feFlood style="flood-color: var(--bg, #fff);" result="whitePlate" />
+
+        <feBlend mode="difference" in="SourceGraphic" in2="targetColor" result="diff" />
+        <feColorMatrix type="matrix" in="diff" result="diffAlpha"
+          values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.333 0.333 0.333 0 0" />
+        <feComponentTransfer in="diffAlpha" result="mask">
+          <feFuncA type="linear" slope="-25.5" intercept="2" />
+        </feComponentTransfer>
+        <feComposite in="whitePlate" in2="mask" operator="in" result="whitenedArea" />
+        <feMerge>
+          <feMergeNode in="SourceGraphic" />
+          <feMergeNode in="whitenedArea" />
+        </feMerge>
+      </filter>
+    </defs>
+  </svg>
 
   <script>
-let $$=localStorage
+    let emo = { 维权: '✊', 求助: '🙏', 建议: '✍️', 投诉: '😾' }
 
-readTwit = (p,csv) => csv.trim().split('\n').forEach(r => {
-  let m = r.split(',')//r.match(/^([^,]+),([^,]+),(\d+),(.*)$/)
-  if (!m) return
-  
-  let [ loc, t, h,dt,url, d] = m,
-      [c, n] = loc.trim().split(/\s+/),
-      v = +h
-  
-  // 基础实体: 直接灌入 List.js 或 UI 模板
-  if(t)rows.push({ loc,dt, type: t, heat: v, url, bg: ({'上访':'brown','国际':'blue'})[t] ?? '#fef2f2', desc: d })
-  
-  // 衍生聚合: Echarts 地图、词云、柱状图所需状态
-  // 双向兼容：保留原 c, v 字段，并注入 name, value 以适配标准图表 Tooltip 遍历
-  ;[n, 'all'].forEach(k => {
-    let s = p[k] = p[k] || { name: k === 'all' ? '全国' : n, value: 0, arr: [], tg: {}, kw: '' }
-    s.value += v
-    s.arr.push({ c, v, name: c, value: v })
-    
-    let g = s.tg[t] = s.tg[t] || { c: 0, h: 0 }
-    g.c++
-    g.h += v
-    s.kw += d
-  })
-  p['全月地图']=p.all
-})
-i0Row=0,cRow=[]
-const segmenter = new Intl.Segmenter('zh', { granularity: 'word' });
-
-draw = (el, p, {ti='两行三列', s = 2}) => {
-  let cur = 'all', aRow=[...rows.slice(i0Row)]; i0Row=rows.length; cRow=rows // 封装状态s，并引入焦点省份cur
-  let [btn,...viz] = el.querySelectorAll(`#b, #m,#wc,#bar,#pie`)
-  let [chart,wc,bar,pie]=viz.map(e=>echarts.getInstanceByDom(e)?? echarts.init(e))
-
-  chart.on('click', e => {
-    cur = (p[e.name])? e.name : null;
-    cRow=(!cur||cur=='all')?aRow: (cur=='全月地图'? rows:aRow).filter(u=>u.loc.endsWith(cur))
-    render()
-  })
-  btn.onclick = () => { s = (s + 1) % 4; render() }
-  let d = Object.values(p).map(x => (x.arr.sort((a, b) => b.v - a.v), x)), fontSize=18, scaleLimit= { min: 1.6, max: $$.F11? 6:4 }
-  
-//chart.dispatchAction({ type: 'geoRoam', zoom: 2 })
-  chart.on('georoam', (p) => {
-    if (!p.zoom)return
-    let z = chart.getOption().series[0].zoom, f=x=>chart.dispatchAction({type: 'restore'})
-    if (z <= scaleLimit.min+.1) {
-  cRow=(!cur||cur=='all')?aRow: (cur=='全月地图'? rows:aRow).filter(u=>u.loc.endsWith(cur))
-      seeCmt(cRow)
-      f(nav('csv'))
-    } // 抵近 scaleLimit.min
-    if (z >= scaleLimit.max) {$$.F11=true;f(nav(el))}
-  })
-  let XX=0b0, L={triggerEvent: true,left: 'center'}; // 2个触发条件
-
-  for(let u of [bar,pie]) u.on('click', (p) => {
-    if (p.componentType !== 'title') return p.event.stop();
-    
-    // 翻转逻辑：基于存在的过滤，而不是真假取反
-    XX^=2**(u==bar? 1:2)
-    render();
-  });
-  
-  let render = () => {
-    let isD = s > 1, isN = s % 2 === 0
-    let bg = isD ? '#111328' : '#b8bfc5', tc = isD ? '#ffffff' : '#333333'
-    
-    el.classList.toggle('dark', isD)
-    btn.innerText = ['☀️ 日间', pick(['☀️ 太阳', 60, '🌞 将军', 20, '😼 雪花猫',20]), '🌙 夜间', pick(['🌙 月亮', 80, '🌑 月球', 20])][s]
-    btn.style.background = isD ? '#2a2d52' : '#f0f0f0'
-    btn.style.color = tc
-    el.style.background = bg
-    chart.setOption({
-      title: { text: ti, left: 20, top: 20, textStyle: { color: tc } },
-      tooltip: {
-        backgroundColor: isD ? 'rgba(20,22,48,0.9)' : '#fff', textStyle: { color: isD ? '#eee' : '#666',fontSize }, borderColor: isD ? '#3a3d6a' : '#eee',
-        formatter(x) {
-          if (!x.data?.arr) return x.name
-          let h = `<div style="font-weight:bold;margin-bottom:8px">${x.name}</div><div>总热度: <span style="color:${isD?'#9b63f8':'#0078D7'}">${x.data.value}</span></div>其中包含<div style="border-top:1px solid ${isD?'#333':'#eee'};padding-top:10px;margin-top:10px;font-size:12px"></div>`
-          x.data.arr.forEach(i => h += `<div style="margin-top:6px">${i.c}市: ${i.v}</div>`)
-          return h
-        }
-      },
-      visualMap: { left: 30, bottom: 30, min: 100, max: 5000, text: ['高', '低'], textStyle: { color: isD ? '#999' : '#666' }, inRange: { color: isD ? ['#21224d', '#7d46f6'] : ['#d6f0fd', '#0078d7'] }, calculable: true, itemHeight: 80 },
-      series: [{
-        type: 'map', map: 'china', roam: true, 
-        scaleLimit, zoom:1.8,
-        nameMap: { '台湾': '🇹🇼', '香港': '🇭🇰', '澳门': '', '南海诸岛':'全月地图' },
-        label: { show: isN, color: isD ? '#aaa' : '#666', fontSize: main.childElementCount? 16:10 }, data: d,
-        itemStyle: { areaColor: isD ? '#1a1c3a' : '#eef6fc', borderColor: isD ? '#2b2e5a' : '#b4d6eb', borderWidth: 1 },
-        emphasis: { label: { show: true, color: isD ? '#fff' : '#000', textBorderColor: isD ? '#000' : '#fff', textBorderWidth: 2 }, itemStyle: { areaColor: isD ? '#7d46f6' : '#fcd271', borderColor: isD ? '#a16cff' : '#ffb300', borderWidth: 2, shadowBlur: 15, shadowColor: isD ? 'rgba(161, 108, 255, 0.8)' : 'rgba(255, 179, 0, 0.8)' } }
-      }]
-    }, )
-
-    let tg, wf = {}, wd
-    pr = p[cur]?? p.all
-    tg=Object.entries(pr.tg)
-if(!wd){
-    // 简易双字切词算法投射分词数据流
-const segments = segmenter.segment(pr.kw || "");
-
-for (const {segment: w, isWordLike} of segments) {
-  if (isWordLike && !/^.$|\d/.test(w)) { // 过滤掉单字和标点
-    wf[w] = -~wf[w]; 
-  }
-}
-
-// 3. 转化为 ECharts 词云/柱状图格式
-wd = Object.entries(wf).slice(0, 16).map(([name, value]) => ({ name, value }));
-}    
-    wc.setOption({
-      title: { text: `${pr.name} 推文词云`, left: 'center', textStyle: { color: tc, fontSize } },
-      tooltip: { show: true },
-      series: [{ type: 'wordCloud', shape: 'rect', sizeRange: [12, 55], rotationRange: [-45, 45], textStyle: { color: () => '#' + Math.floor(Math.random() * 16777215).toString(16) }, data: wd }]
-    }, )
-
-if (XX&2**1) {
-  // 聚合各个省份的热度 (c 是 loc 按空格切割的第一部分)
-  let provMap = {};
-  cRow.forEach(r => {
-    let prov = r.loc.split(/\s+/)[0]; 
-    provMap[prov] = (provMap[prov] || 0) + r.heat;
-  });
-
-  // 转为数组并按热度升序排序 (Echarts 横向柱状图通常需要升序以在顶部显示最大值)
-  let sortedProv = Object.entries(provMap).sort((a, b) => a[1] - b[1]);
-
-  bar.setOption({
-    title: { ...L, text: '省份热度排名', left: 'center' },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'value', name: '热度' },
-    yAxis: { 
-      type: 'category', 
-      data: sortedProv.map(item => item[0]), // 省份名称
-      axisLabel: { interval: 0 } 
-    },
-    series: [{
-      type: 'bar',
-      data: sortedProv.map(item => item[1]), // 热度数值
-      itemStyle: { borderRadius: [0, 4, 4, 0], color: '#5470c6' },
-      label: { show: true, position: 'right' }
-    }]
-  }, true); // 加上 true 表示不与旧配置合并，彻底替换
-}else{
-    let bd = tg.map(([k, v]) => ({ name: k, value: v.c })).sort((a, b) => a.value - b.value)
-    bar.setOption({
-      title: { ...L, text: `🕹${pr.name} 事件榜 (热门)`, textStyle: { color: tc, fontSize } },
-      tooltip: { trigger: 'axis' },
-      grid: { left: '15%', right: '10%', bottom: '15%', top: '20%' },
-      xAxis: { type: 'value', splitLine: { lineStyle: { color: isD ? '#333' : '#eee' } } },
-      yAxis: { type: 'category', data: bd.map(x => x.name), axisLabel: { color: tc } },
-      series: [{ type: 'bar', data: bd.map(x => x.value), itemStyle: { color: isD ? '#9b63f8' : '#0078D7' } }]
-    }, true)
-}
-
-if (XX&2**2) {
-// 1. 极简聚合：直接生成 dataset 需要的二维数组 [['第1周', 10], ['第2周', 15]]
-  let wm = {};
-  cRow.forEach(r => {
-    let w = `月度第${Math.ceil(new Date(r.dt).getDate() / 7)}周`;
-    wm[w] = (wm[w] || 0) + 1;
-  });
-
-  // 2. 极简配置：利用 dataset 自动映射数据
-  pie.setOption({
-    title: { ...L, text: '按周贴文数量', left: 'center' },
-    dataset: { source: Object.entries(wm) }, // 核心：数据全塞这里，Echarts 自己认
-    xAxis: { type: 'category' },
-    yAxis: { type: 'value' },
-    series: [
-      { type: 'bar', barWidth: 4, colorBy: 'data' }, // 茎
-      { type: 'scatter', symbolSize: 16, colorBy: 'data', label: { show: true, position: 'top' } } // 叶（带数字）
-    ]
-  }, true);
-}else{
-    let pd = tg.map(([k, v]) => ({ name: k, value: v.h }))
-    pie.setOption({
-      title: { ...L, text: `🕹${pr.name} 事件热度`, left: 'center', textStyle: { color: tc, fontSize } },
-      tooltip: { trigger: 'item' },
-      series: [{ type: 'pie', radius: ['40%', '70%'], center: ['50%', '55%'], data: pd, itemStyle: { borderColor: isD ? '#181b38' : '#fff', borderWidth: 2 } }]
-    }, true)
-}
-
-  }
-
-  let obs = new ResizeObserver(es => es.forEach(e => {
-    echarts.getInstanceByDom(e.target)?.resize()
-    let w=e.contentRect.width
-    if(e.target.id=='wc') wc.setOption({series: [{type: 'wordCloud', sizeRange: [w / 20, w / 8]}]})
-    if(e.target.id=='m')render()//标题与位置匹配
-  }))
-  viz.forEach(x => obs.observe(x))
-  render()
-  bar.on('click',linkSearch)
-  wc.on('click', linkSearch);
-
-}
-
-pick = (a, r = Math.random() * a.reduce((s, v, i) => i % 2 ? s + v : s, 0)) => a[a.findIndex((v, i) => i % 2 && (r -= v) < 0) - 1];
-day2simp = [
-  s => new Date(23, parseInt(s[0], 36) - 1, s.slice(1))
-,
-  (d = new Date()) => 
-    (d.getMonth() + 1).toString(36) + 
-    (d.getDate() + '').padStart(2, 0)
-]
-// UI渲染：直接构建符合 List.js 要求的 DOM 结构
-seeCmt = (data) => {
-  let e = document.querySelector('.list')
-  e.innerHTML = data.map(x => `
+    let seeCmt = (data) => {
+      let e = document.querySelector('.list')
+      e.innerHTML = data.map(x => `
     <li class="item">
       <div class="meta">
         <span class="loc">${x.loc}</span>
         <a href="${x.url}">${x.dt}</a>
         <span> <b class="heat">-${x.heat}°C</b></span>
-        <span class="type"  style="background:${x.bg}">${x.type}</span>
+        <span class="type"  style="background:${x.bg ?? '#fef2f2'}">${x.type}</span>
       </div>
       <div class="desc">${x.desc}</div>
     </li>
   `).join('')
 
-  // 初始化 List.js: 绑定 class 名即可实现 Table 功能
-  cTbl=new List('tbl', {
-    valueNames: ['loc', 'type', 'heat', 'bg', 'desc']
-  })
-  const searchInput = document.querySelector('#tbl .search');
-  
-document.querySelectorAll('#tbl .sort').forEach(el => {
-  // 仅针对你希望默认降序的字段，比如 'heat'
-  if(el.dataset.sort === 'heat') {
-    el.classList.add('asc'); 
-  }
-});
+      // 初始化 List.js: 绑定 class 名即可实现 Table 功能
+      cTbl = new List('tbl', {
+        valueNames: ['loc', 'type', 'heat', 'bg', 'desc']
+      })
+    },
+      readTwit = (p, csv) => csv.trim().split('\n').forEach(r => {
+        let m = r.split(',')
+        if (!m) return
 
-linkSearch = ({name:s, componentType:ct}) => {
-  if (ct == 'title') return 
-  seeCmt(cRow)
-  searchInput.value = s;
-  // 2. 执行 List.js 搜索
-  cTbl.search(s);
-  nav('csv')
-};
+        let [loc, t, h, dt, url, d] = m,
+          [c, n] = loc.trim().split(/\s+/),
+          v = +h
 
-  //if(e.offsetHeight<=e.scrollHeight)e.insertAdjacentHTML('beforeEnd', `<img height=${e.offsetHeight}>`)
-}
+        // 基础实体: 直接灌入 List.js 或 UI 模板
+        if (t) p.push({ loc, dt, type: t, heat: v, url, desc: d })
+      }),
 
-seeCmt([{}])
-  </script>
-  
-<script>
+      cityData = (rawData, add, i = 0) => {
 
-csvs=
-`武汉 湖北,维权,2209,2024-03-04,and,3月8日，湖北省武汉市，武汉市“江油”国控市政建设集团有限公司承建江油乡村振兴江油农民就业基地（一期）“江油”市B地块,一期一标段，居民聚集维权。居民反映：电池厂的建造选址就位于小区旁边隔壁200米。
-黄冈 湖北,投诉,1450,2024-03-05,and,黄冈市罗田县居民反映自来水浑浊问题，要求相关部门尽快解决水质安全。
-襄阳 湖北,维权,800,2024-03-06,and,襄阳市樊城区某楼盘延期交房，业主集体要求退房赔偿。
-长沙 湖南,求助,1200,2024-03-07,and,长沙某校学生求助，关于住宿费退费流程不透明。
-呼和浩特 内蒙古,建议,300,2024-03-08,and,市民建议增加共享单车投放点。
-台北 台湾,维权,500,2024-03-09,and,市民抗议公共设施老化问题。
---
-## 广州 广东,投诉,1800,2024-03-11,and,广州市天河区居民反映夜间施工噪音扰民，严重影响正常休息。
-成都 四川,维权,2100,2024-03-12,and,成都市高新区某长租公寓爆雷，租客和房东聚集要求退还押金和租金。
-杭州 浙江,建议,650,2024-03-13,and,市民建议在地铁换乘站增加无障碍电梯，方便老年人和残障人士出行。
-西安 陕西,求助,900,2024-03-14,and,未央区部分老旧小区近期停水停电频发，居民求助解决基础设施老化问题。
---
-## 郑州 河南,维权,3200,2024-03-18,and,某制造工厂拖欠工人近三个月工资，工人聚集要求相关部门介入讨薪。
-深圳 广东,投诉,1500,2024-03-19,and,多名外卖骑手投诉平台随意扣罚派送费，要求优化派单和考核算法。
-合肥 安徽,求助,400,2024-03-20,and,部分高校应届毕业生求助，称被某科技公司试用期无故辞退且未给任何补偿。
-南京 江苏,建议,750,2024-03-21,and,市民建议增加灵活就业人员的社保补贴渠道和线下办理网点。
---
-北京 北京,维权,2800,2024-03-25,and,海淀区某知名连锁早教机构突然闭店跑路，家长集体登记要求退还预交学费。
-上海 上海,投诉,1350,2024-03-26,and,多名消费者集中投诉某电商平台大促期间“先涨后降”，涉嫌虚假宣传和价格欺诈。
-武汉 湖北,求助,600,2024-03-27,and,大学生求助，在二手交易平台购买电子产品遭遇连环诈骗，希望相关部门加快处理。
-济南 山东,建议,450,2024-03-28,and,家长建议市场监管局规范中小学周边文具店售卖的“盲盒”类产品，避免诱导未成年人消费。
-重庆 重庆,投诉,1100,2024-03-29,and,渝北区居民反映某化工厂夜间疑似偷排废气，导致周边空气经常伴有刺鼻异味。
-苏州 江苏,建议,850,2024-03-30,and,市民建议在早晚高峰时段增加工业园区主干道的公交车班次，缓解通勤拥堵。
-大连 辽宁,维权,1600,2024-03-31,and,某小区地下车库因暴雨倒灌导致多辆私家车受损，业主联名要求物业公司承担赔偿责任。
-昆明 云南,求助,500,2024-04-01,and,部分农户求助，近期极端冰雹天气导致花卉等经济作物受损严重，希望能申请农业防灾减灾补贴。`.split('\n--\n')
+        const a = _.chain(rawData)
+          .groupBy(item => item.loc.split(' ')[0]) // 按城市分组
+          .mapValues(items => {
+            // 在城市组内，按热度降序排列
+            const sortedItems = _.orderBy(items, ['heat'], ['desc']);
+            // 映射出需要的字段，并生成 nth (从 1 开始的排名)
+            return _.map(sortedItems, (item) => ({
+              type: item.type,
+              heat: item.heat,
+              nth: i++,
+              desc: item.desc
+            }));
+          })
+          .toPairs().value();
 
-let kCsv, season=0
-
-let rows=[], e0=a0, pLoad=(e,s,i, p=[])=>{readTwit(p,s);draw(e, p, {ti:"❄ WHYO."+excelForm(` ${kCsv}${day2simp[+1](new Date(23, 0, 1+7*i))}`)})}
-e0.remove();e0.removeAttribute('id')
-art=i0=>Array(4).fill().map((_,i,e)=>{
-  if(4!=grd.childElementCount){e=e0.cloneNode(true);grd.append(e)} else e=grd.children[i]
-  let ik=Math.max(0, i0+i)%csvs.length
-  pLoad(e, csvs[ik], season+ik+i)
-  return ik
-})
+        add(a.flatMap(([k, a]) => a.map(x => [k, `${x.nth}${emo[x.type] ?? '👍'}`])))
 
 
 
-{
+      },
+      mapDragRect = u => u.on('boxzoomend', function (e) {
+        // e.boxZoomBounds 就是你用 Shift 键拉出来的矩形范围
+        const containerBounds = e.boxZoomBounds;
 
-  // --- 退出机制 (Scroll Boundaries) ---
-  let lastY = 0, i0=0, e0
-  tbl.onscroll = () => {
-    if (tbl.scrollTop <= 0) nav('csv')
-  }
+        // 遍历 GeoJSON 图层中的每一个要素
+        gis.eachLayer(function (layer) {
+          // 如果是点要素（Marker / CircleMarker）
+          if (layer.getLatLng && containerBounds.contains(layer.getLatLng())) {
+            // 该要素在框选范围内，改变其样式或将其加入选中列表
+            layer.setStyle({ color: 'red' });
+          }
 
-nav=k=>{
-  let fx=(A,B)=>{let c=document.body.style;c.pointerEvents='none'; document.startViewTransition?.(()=>A.prepend(B))?.finished?.then(_=>c.pointerEvents='unset') ?? A.prepend(B)}
-  
-  if(k.nodeType){
-    //k.requestFullscreen().catch(ex=>alert('请先选中省份再全屏查看哦')); document.exitFullscreen()
-    k.style.viewTransitionName = 'hero'
-    if(e0) {fx(grd,e0); $$.F11=e0.style.viewTransitionName = ''}
-    if(e0!=k) fx(main,e0=k); else e0=null
-    setTimeout(()=>scrollTo(0,0),500) //FIXME lastY 乱序、title更新导致跳变
-  } else 
-  if(k=='csv'){
-    //if(e1) {document.body.append(e1);e1=null;nav(e0)} else main.append(e1=tbl)
-    tbl.scrollTop+=3
-    ;(lastY++%2?main:tbl).scrollIntoView({behavior:'smooth'})
-  } else {
-    //开始pager
-    i0+=k
-    art_=art(i0)
-    location.hash=excelForm(excelForm(location.hash).replace(/...$/, day2simp[+1](new Date(23, 0, i0+1))))
-    for(let e of grd.children) echarts.getInstanceByDom(e)?.resize()
-  }
-}
+          // 如果是线或面要素（Polyline / Polygon）
+          else if (layer.getBounds && containerBounds.intersects(layer.getBounds())) {
+            // 判断其边界是否与框选范围相交
+            layer.setStyle({ color: 'red' });
+          }
+        });
+      });
 
-  grd.onwheel = grd.onclick = (ev,Y) => {
-    // 滚动触底判定 (容差 1px 应对小数像素)
-    Y=ev.deltaY
-    if (ev.target==grd) {
-      if(Y!=null) nav(Y >= 0? +1:-1)
-      else nav(-1)
+    let ti = s => ({ text: s, left: 'center', textStyle: { color: '#333333', fontSize: 30, rich: { b: { backgroundColor: '#66ccff', borderRadius: 4, padding: [2, 8, 4, 8], } } } }),
+      segmenter = new Intl.Segmenter('zh', { granularity: 'word' }),
+      seeWd = (s, k, data, wf = {}) => {
+
+        // 简易双字切词算法投射分词数据流
+        const segments = segmenter.segment(s || "");
+
+        for (const { segment: w, isWordLike } of segments) {
+          if (isWordLike && !/^.$|\d/.test(w)) { // 过滤掉单字和标点
+            wf[w] = -~wf[w];
+          }
+        }
+
+        // 3. 转化为 ECharts 词云/柱状图格式
+        data = Object.entries(wf).slice(0, 16).map(([name, value]) => ({ name, value }));
+        wc.setOption({
+          title: ti(`{b|${k ?? "城市"}} 推文词云`),
+          tooltip: { show: true },
+          series: [{ type: 'wordCloud', data, shape: 'rect', rotationRange: [-45, 45], textStyle: { color: () => '#' + Math.floor(Math.random() * 16777215).toString(16) } }]
+        },)
+      },
+
+      seeTop = a => {
+        let bd = _.countBy(a, item => item.type)
+        tops.setOption({
+          title: ti('😼 高频事件榜'),
+          tooltip: { trigger: 'axis' },
+          grid: { left: '15%', right: '10%', bottom: '15%', top: '20%' },
+          xAxis: { type: 'value', splitLine: { lineStyle: { color: '#eee' } } },
+          yAxis: { type: 'category', data: Object.keys(bd).map(k => (emo[k] ?? '') + k) },
+          series: [{ type: 'bar', data: Object.values(bd), itemStyle: { color: '#9b63f8' } }]
+        }, true)
+        let data = a.map(({ type: k, heat: v }) => ({ name: k, value: v }))
+        pie.setOption({
+          title: { text: `按热度统计` },
+          tooltip: { trigger: 'item' },
+          series: [{ type: 'pie', radius: ['40%', '70%'], center: ['50%', '55%'], data, itemStyle: { borderColor: '#181b38', borderWidth: 2 } }]
+        }, true)
+      },
+
+      seeWeek = a => {
+
+        let wm = _.countBy(a, item => new Date(item.dt).getDay()), source = [1, 2, 3, 4, 5, 6, 0].map(dayNum => {
+          const label = '周' + (dayNum === 0 ? '日' : ['一', '二', '三', '四', '五', '六'][dayNum - 1]);
+          return [label, wm[dayNum] ?? 0];
+        }),
+          lin = {
+            type: 'line', smooth: true, symbol: 'circle', symbolSize: 12,
+          }
+
+        liner.setOption({
+          title: ti('按周贴文数量'),
+          dataset: { source }, //[['周1', 10], ['周2', 15]]
+          tooltip: {
+            trigger: 'axis', // 设置为 'axis' 或 'item'
+            formatter: '这天: {c}' // 格式化显示内容
+          },
+          xAxis: { type: 'category' },
+          yAxis: { type: 'value' },
+          series: lin ?? [
+            { type: 'bar', barWidth: 4, colorBy: 'data' }, // 茎
+            { type: 'scatter', symbolSize: 16, colorBy: 'data', label: { show: true, position: 'top' } } // 叶（带数字）
+          ]
+        }, true)
+      }
+
+    // 1. 辅助函数：根据 'YYYY-MM-DD' 获取该日期属于当年第几周 (ISO-8601 标准)
+    const getISOWeek = (dateStr) => {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '未知周';
+
+      // 调整到周四（ISO周的标准：包含当年第一个周四的周为第一周）
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() + 4 - (date.getDay() || 7));
+
+      const yearStart = new Date(date.getFullYear(), 0, 1);
+      const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+
+      return `${date.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+    };
+
+    /**
+     * 创建一个仅限于中国区域的二维地图实例
+     * @param {string} el - 地图容器的DOM元素ID
+     * @param {function} onMarkerClick - 浮标点击事件的回调函数
+     * @returns {function} - 返回一个接收数据并绘制浮标的函数
+     */
+    function MapRect(el, onMarkerClick, onCity, onHeat) {
+      // 步骤2: 定义中国的地理边界
+      const chinaBounds = L.latLngBounds(
+        L.latLng(10, 64), // 西南角
+        L.latLng(54, 145) // 东北角
+      );
+
+      // 步骤3: 初始化地图，并应用限制
+      const u = L.map(el, {
+        center: [36, 109],      // 地图中心点设为中国
+        zoom: 5,                // 初始缩放级别
+        minZoom: 4, maxZoom: 6,             // 最小缩放级别，防止过度缩小
+        maxBounds: chinaBounds, // 设置地图拖拽边界
+        maxBoundsViscosity: 1.0, // 设置边界为“硬”边界，无法拖出
+        attributionControl: false
+      });
+      L.control.attribution({ prefix: L.Control.Attribution.prototype.options.prefix.replace('Leaflet', '') }).addTo(u);
+
+      mapHov(u, onCity, onHeat)
+      mapDragRect(u)
+
+      icTalk.onclick = ({ target: e }) => {
+        '?' || L.popup()
+          .setLatLng(u.containerPointToLatLng([e.offsetLeft + 50, e.offsetTop]))
+          .setContent('hi')
+          .openOn(u)
+
+        {
+          let A = (min, max) => Math.random() * (max - min) + min;
+
+          confetti({
+            angle: 55,
+            spread: A(50, 70),
+            particleCount: A(50, 100),
+            origin: { y: 0.8, x: 0 },
+            scalar: 2,
+            shapes: ['star'].concat([...Object.values(emo), ..."🌈🌹🌏"].map(s => confetti.shapeFromText({ text: s, scalar: 2 })))
+          });
+        }
+      }
+      u.attributionControl._container.onclick = () => confetti.ukraine()
+
+      const markerLayer = L.layerGroup().addTo(u);
+
+      // 返回核心的绘图函数
+      return function (data) {
+        markerLayer.clearLayers(); // 每次绘制前清空旧的浮标
+
+        data.forEach(([locationStr, id]) => {
+          const cityName = locationStr.split(' ')[0];
+          // 从“外部库”加载的 CHINA_CITIES_DB 中查找坐标
+          const coords = CHINA_CITIES_DB[cityName];
+
+          if (coords) {
+            const marker = L.marker(coords, {
+              icon: L.divIcon({
+                className: 'pnt',
+                html: [...id].at(-1)
+              })
+            })
+              .bindPopup(locationStr)
+              .on('click', () => onMarkerClick(id));
+            markerLayer.addLayer(marker);
+          } else {
+            console.warn(`未在数据库中找到城市: ${cityName}`);
+          }
+        });
+      };
     }
-  }
 
-}
-excelForm=s=>s.replace(/(?<=.{3})(.)(.)/,'$2$1')
-excelForm(location.hash)
-.replace(/#(\d{2}[ABCD])([0-9a-c]{3})/, (m, A,B)=>{
-  kCsv=A
-  fetch(A+'.csv').then(r=>r.ok? r.text() : Promise.reject(alert('未爬取该年季度数据'+A),nav(0))).then(r=>{
-    csvs=r.split('\n--\n')
-    nav(doy-season -1);setTimeout(()=>scrollTo(0,0),500)
-    if($$.F11) nav(grd.children[0])
-  })
-  let k="ABCD".indexOf(kCsv[2]), doy = Math.round((+day2simp[0](B) - new Date(23, 0, 0)) / 864e5);
-  season=[0, 90, 181, 273][k]
-})
+    let mo = { fillOpacity: 0.0, weight: 1, color: 'cadetblue' }, mapHov = (u, tap, f) => {
 
-if(!kCsv) location.reload(location='#262A19')
-</script>  
+      // 加载并添加图层
+      fetch('./100000_full.json')
+        .then(res => res.json())
+        .then(data => {
+          window.gis = L.geoJson(data, {
+            style: mo,
+            onEachFeature
+          }).addTo(u);
+          gis.json = data
 
+          // 添加瓦片图层
+          L.TileLayer.boundaryCanvas(0 ? 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png' : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">感谢OSM开源</a>',
+            boundary: gis.json,
+          }).addTo(u);
+
+        });
+
+      // 简单的悬停逻辑（复用之前的写法）
+      let g0, onEachFeature = (feature, layer, 省) => {
+        省 = feature.properties.name.replace(/[省市]$/, '')
+        layer.on({
+          mouseover: (e) => {
+            e.target.setStyle({ fillOpacity: 0.3, weight: 2 });
+            // 可以在此处显示城市名
+          },
+          mouseout: (e, u) => {
+            u = e.target
+            if (g0 != u) u.setStyle({ fillOpacity: 0 })
+            f(省, u)
+          },
+          click(e) {
+            L.DomEvent.stopPropagation(e);
+            if (g0) { g0.setStyle(mo); g0.fire('mouseout') }
+            g0 = e.target; g0.setStyle({
+              fillOpacity: 0.6,
+              weight: 3,
+              color: '#ff4500' // 高亮边框颜色
+            });
+            tap(省);
+          }
+        });
+
+        f(省, layer)
+      }
+      tap('')
+      u.on({ click() { g0?.setStyle(mo); tap(''); g0 = null } })
+
+    }
+    window.globe = () => {
+      const P = { parser: { type: 'json', x: 'lng', y: 'lat' } }, cities = [
+        { lng: 116.4, lat: 39.9, v: '🙏' }, { lng: 121.5, lat: 31.2, n: '🍔', v: '✍️' },
+      ]
+      window.scene = new L7.Scene({
+        id: 'map',
+        map: new L7.GaodeMap({ style: 'dark', features: ['bg', 'point'], center: [108, 35], zoom: 4, pitch: 20, token: '高德Key' })
+      });
+      scene.on('loaded', () => {
+
+        let emojis = Object.values(emo) //['🚀', '🔥', '📍', '🐼','🍔'];
+        emojis.forEach(emoji => {
+          scene.addImage(`${emoji}`, rasterizeEmoji(emoji, 64));
+        });
+
+        scene.addLayer(new L7.PointLayer().source(cities, P).shape('v', v => v).size(24))
+
+        scene.addLayer(new L7.LineLayer()
+          .source(gis.json)
+          .size(1)
+          .color('#336699') // 省界颜色
+          .style({
+            opacity: 0.6
+          }));
+      });
+    }
+
+    function rasterizeEmoji(emoji, size = 60) {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // 设置字体，确保 Emoji 居中
+      ctx.font = `${size * 0.8}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // 可以选择在这里加自定义发光或阴影
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = 4;
+
+      // 绘制 Emoji
+      ctx.fillText(emoji, size / 2, size / 2);
+
+      return canvas.toDataURL(); // 返回 base64 字符串
+    }
+    confetti.ukraine = (dur = 7.7, colors = ['#4C7BE1', '#FFD500']) => {
+      var end = Date.now() + (dur * 1000);
+
+      (function frame() {
+        confetti({
+          particleCount: 2,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0 },
+          colors: colors
+        });
+        confetti({
+          particleCount: 2,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1 },
+          colors: colors
+        });
+
+        if (Date.now() < end) {
+          requestAnimationFrame(frame);
+        }
+      }());
+    }
+    CHINA_CITIES_DB = { ...CHINA_CITIES_DB, "台北": [39.917544, 116.418757], "西城区": [39.915309, 116.366794], "北京": [39.921489, 116.486409], "丰台区": [39.863642, 116.286968], "石景山区": [39.914601, 116.195445], "海淀区": [39.956074, 116.310316], "门头沟区": [39.937183, 116.105381], "房山区": [39.735535, 116.139157], "通州区": [39.902486, 116.658603], "顺义区": [40.128936, 116.653525], "昌平区": [40.218085, 116.235906], "大兴区": [39.728908, 116.338033], "怀柔区": [40.324272, 116.637122], "平谷区": [40.144783, 117.112335], "密云区": [40.377362, 116.843352], "延庆区": [40.465325, 115.985006], "和平区": [39.118327, 117.195907], "河东区": [39.122125, 117.226568], "河西区": [39.101897, 117.217536], "南开区": [39.120474, 117.164143], "河北区": [39.156632, 117.201569], "红桥区": [39.175066, 117.163301], "东丽区": [39.087764, 117.313967], "西青区": [39.139446, 117.012247], "津南区": [38.989577, 117.382549], "北辰区": [39.225555, 117.13482], "武清区": [39.376925, 117.057959], "宝坻区": [39.716965, 117.308094], "滨海新区": [39.032846, 117.654173], "宁河区": [39.328886, 117.82828], "静海区": [38.935671, 116.925304], "蓟州区": [40.045342, 117.407449], "石家庄": [38.045474, 114.502461], "唐山": [39.635113, 118.175393], "秦皇岛": [39.942531, 119.586579], "邯郸": [36.612273, 114.490686], "邢台": [37.0682, 114.508851], "保定": [38.867657, 115.482331], "张家口": [40.811901, 114.884091], "承德": [40.976204, 117.939152], "沧州": [38.310582, 116.857461], "廊坊": [39.523927, 116.704441], "衡水": [37.735097, 115.665993], "太原": [37.857014, 112.549248], "大同": [40.09031, 113.295259], "阳泉": [37.861188, 113.583285], "长治": [36.191112, 113.113556], "晋城": [35.497553, 112.851274], "朔州": [39.331261, 112.433387], "晋中": [37.696495, 112.736465], "运城": [35.022778, 111.003957], "忻州": [38.41769, 112.733538], "临汾": [36.08415, 111.517973], "吕梁": [37.524366, 111.134335], "呼和浩特": [40.818311, 111.670801], "包头": [40.658168, 109.840405], "乌海": [39.673734, 106.825563], "赤峰": [42.275317, 118.956806], "通辽": [43.617429, 122.263119], "鄂尔多斯": [39.817179, 109.99029], "呼伦贝尔": [49.215333, 119.758168], "巴彦淖尔": [40.757402, 107.416959], "乌兰察布": [41.034126, 113.114543], "兴安盟": [46.076268, 122.070317], "锡林郭勒盟": [43.944018, 116.090996], "阿拉善盟": [38.844814, 105.706422], "沈阳": [41.796767, 123.429096], "大连": [38.91459, 121.618622], "鞍山": [41.110626, 122.995632], "抚顺": [41.875956, 123.921109], "本溪": [41.297909, 123.770519], "丹东": [40.124296, 124.383044], "锦州": [41.119269, 121.135742], "营口": [40.667432, 122.235151], "阜新": [42.011796, 121.648962], "辽阳": [41.269402, 123.18152], "盘锦": [41.124484, 122.06957], "铁岭": [42.290585, 123.844279], "朝阳": [41.576758, 120.451176], "葫芦岛": [40.755572, 120.856394], "长春": [43.886841, 125.3245], "吉林": [43.843577, 126.55302], "四平": [43.170344, 124.370785], "辽源": [42.902692, 125.145349], "通化": [41.721177, 125.936501], "白山": [41.942505, 126.427839], "松原": [45.118243, 124.823608], "白城": [45.619026, 122.841114], "延边朝鲜族自治州": [42.904823, 129.513228], "哈尔滨": [45.756967, 126.642464], "齐齐哈尔": [47.342081, 123.95792], "鸡西": [45.300046, 130.975966], "鹤岗": [47.332085, 130.277487], "双鸭山": [46.643442, 131.157304], "大庆": [46.590734, 125.11272], "伊春": [47.724775, 128.899396], "佳木斯": [46.809606, 130.361634], "七台河": [45.771266, 131.015584], "牡丹江": [44.582962, 129.618602], "黑河": [50.249585, 127.499023], "绥化": [46.637393, 126.99293], "大兴安岭地区": [52.335262, 124.711526], "黄浦区": [31.222771, 121.490317], "徐汇区": [31.179973, 121.43752], "长宁区": [31.218123, 121.4222], "静安区": [31.229003, 121.448224], "普陀区": [31.241701, 121.392499], "虹口区": [31.26097, 121.491832], "杨浦区": [31.270755, 121.522797], "闵行区": [31.111658, 121.375972], "宝山区": [31.398896, 121.489934], "嘉定区": [31.383524, 121.250333], "浦东新区": [31.245944, 121.567706], "金山区": [30.724697, 121.330736], "松江区": [31.03047, 121.223543], "青浦区": [31.151209, 121.113021], "奉贤区": [30.912345, 121.458472], "崇明区": [31.626946, 121.397516], "南京": [32.041544, 118.767413], "无锡": [31.574729, 120.301663], "徐州": [34.261792, 117.184811], "常州": [31.772752, 119.946973], "苏州": [31.299379, 120.619585], "南通": [32.016212, 120.864608], "连云港": [34.600018, 119.178821], "淮安": [33.597506, 119.021265], "盐城": [33.377631, 120.139998], "扬州": [32.393159, 119.421003], "镇江": [32.204402, 119.452753], "泰州": [32.484882, 119.915176], "宿迁": [33.963008, 118.275162], "杭州": [30.287459, 120.153576], "宁波": [29.868388, 121.549792], "温州": [28.000575, 120.672111], "嘉兴": [30.762653, 120.750865], "湖州": [30.867198, 120.102398], "绍兴": [29.997117, 120.582112], "金华": [29.089524, 119.649506], "衢州": [28.941708, 118.87263], "舟山": [30.016028, 122.106863], "台州": [28.661378, 121.428599], "丽水": [28.451993, 119.921786], "合肥": [31.86119, 117.283042], "芜湖": [31.326319, 118.376451], "蚌埠": [32.939667, 117.363228], "淮南": [32.647574, 117.018329], "马鞍山": [31.689362, 118.507906], "淮北": [33.971707, 116.794664], "铜陵": [30.929935, 117.816576], "安庆": [30.50883, 117.043551], "黄山": [29.709239, 118.317325], "滁州": [32.303627, 118.316264], "阜阳": [32.896969, 115.819729], "宿州": [33.633891, 116.984084], "六安": [31.752889, 116.507676], "亳州": [33.869338, 115.782939], "池州": [30.656037, 117.489157], "宣城": [30.945667, 118.757995], "福州": [26.075302, 119.306239], "厦门": [24.490474, 118.11022], "莆田": [25.431011, 119.007558], "三明": [26.265444, 117.635001], "泉州": [24.908853, 118.589421], "漳州": [24.510897, 117.661801], "南平": [26.635627, 118.178459], "龙岩": [25.091603, 117.02978], "宁德": [26.65924, 119.527082], "南昌": [28.676493, 115.892151], "景德镇": [29.29256, 117.214664], "萍乡": [27.622946, 113.852186], "九江": [29.712034, 115.992811], "新余": [27.810834, 114.930835], "鹰潭": [28.238638, 117.033838], "赣州": [25.85097, 114.940278], "吉安": [27.111699, 114.986373], "宜春": [27.8043, 114.391136], "抚州": [27.98385, 116.358351], "上饶": [28.44442, 117.971185], "济南": [36.675807, 117.000923], "青岛": [36.082982, 120.355173], "淄博": [36.814939, 118.047648], "枣庄": [34.856424, 117.557964], "东营": [37.434564, 118.66471], "烟台": [37.539297, 121.391382], "潍坊": [36.70925, 119.107078], "济宁": [35.415393, 116.587245], "泰安": [36.194968, 117.129063], "威海": [37.509691, 122.116394], "日照": [35.428588, 119.461208], "临沂": [35.065282, 118.326443], "德州": [37.453968, 116.307428], "聊城": [36.456013, 115.980367], "滨州": [37.383542, 118.016974], "菏泽": [35.246531, 115.469381], "郑州": [34.757975, 113.665412], "开封": [34.797049, 114.341447], "洛阳": [34.663041, 112.434468], "平顶山": [33.735241, 113.307718], "安阳": [36.103442, 114.352482], "鹤壁": [35.748236, 114.295444], "新乡": [35.302616, 113.883991], "焦作": [35.23904, 113.238266], "濮阳": [35.768234, 115.041299], "许昌": [34.022956, 113.826063], "漯河": [33.575855, 114.026405], "三门峡": [34.777338, 111.194099], "南阳": [32.999082, 112.540918], "商丘": [34.437054, 115.650497], "信阳": [32.123274, 114.075031], "周口": [33.620357, 114.649653], "驻马店": [32.980169, 114.024736], "济源": [35.090378, 112.590047], "武汉": [30.584355, 114.298572], "黄石": [30.220074, 115.077048], "十堰": [32.646907, 110.787916], "宜昌": [30.702636, 111.290843], "襄阳": [32.042426, 112.144146], "鄂州": [30.396536, 114.890593], "荆门": [31.03542, 112.204251], "孝感": [30.926423, 113.926655], "荆州": [30.326857, 112.23813], "黄冈": [30.447711, 114.879365], "咸宁": [29.832798, 114.328963], "随州": [31.717497, 113.37377], "恩施土家族苗族自治州": [30.283114, 109.48699], "仙桃": [30.364953, 113.453974], "潜江": [30.421215, 112.896866], "天门": [30.653061, 113.165862], "神农架林区": [31.744449, 110.671525], "长沙": [28.19409, 112.982279], "株洲": [27.835806, 113.151737], "湘潭": [27.82973, 112.944052], "衡阳": [26.900358, 112.607693], "邵阳": [27.237842, 111.46923], "岳阳": [29.37029, 113.132855], "常德": [29.040225, 111.691347], "张家界": [29.127401, 110.479921], "益阳": [28.570066, 112.355042], "郴州": [25.793589, 113.032067], "永州": [26.434516, 111.608019], "怀化": [27.550082, 109.97824], "娄底": [27.728136, 112.008497], "湘西土家族苗族自治州": [28.314296, 109.739735], "广州": [23.125178, 113.280637], "韶关": [24.801322, 113.591544], "深圳": [22.547, 114.085947], "珠海": [22.224979, 113.553986], "汕头": [23.37102, 116.708463], "佛山": [23.028762, 113.122717], "江门": [22.590431, 113.094942], "湛江": [21.274898, 110.364977], "茂名": [21.659751, 110.919229], "肇庆": [23.051546, 112.472529], "惠州": [23.079404, 114.412599], "梅州": [24.299112, 116.117582], "汕尾": [22.774485, 115.364238], "河源": [23.746266, 114.697802], "阳江": [21.859222, 111.975107], "清远": [23.685022, 113.051227], "东莞": [23.046237, 113.746262], "中山": [22.521113, 113.382391], "潮州": [23.661701, 116.632301], "揭阳": [23.543778, 116.355733], "云浮": [22.929801, 112.044439], "南宁": [22.82402, 108.320004], "柳州": [24.314617, 109.411703], "桂林": [25.274215, 110.299121], "梧州": [23.474803, 111.297604], "北海": [21.473343, 109.119254], "防城港": [21.614631, 108.345478], "钦州": [21.967127, 108.624175], "贵港": [23.0936, 109.602146], "玉林": [22.63136, 110.154393], "百色": [23.897742, 106.616285], "贺州": [24.414141, 111.552056], "河池": [24.695899, 108.062105], "来宾": [23.733766, 109.229772], "崇左": [22.404108, 107.353926], "海口": [20.031971, 110.33119], "三亚": [18.247872, 109.508268], "三沙": [16.831039, 112.34882], "儋州": [19.517486, 109.576782], "五指山": [18.776921, 109.516662], "琼海": [19.246011, 110.466785], "文昌": [19.612986, 110.753975], "万宁": [18.796216, 110.388793], "东方": [19.10198, 108.653789], "定安县": [19.684966, 110.349235], "屯昌县": [19.362916, 110.102773], "澄迈县": [19.737095, 110.007147], "临高县": [19.908293, 109.687697], "白沙黎族自治县": [19.224584, 109.452606], "昌江黎族自治县": [19.260968, 109.053351], "乐东黎族自治县": [18.74758, 109.175444], "陵水黎族自治县": [18.505006, 110.037218], "保亭黎族苗族自治县": [18.636371, 109.70245], "琼中黎族苗族自治县": [19.03557, 109.839996], "万州区": [30.807807, 108.380246], "涪陵区": [29.703652, 107.394905], "渝中区": [29.556742, 106.56288], "大渡口区": [29.481002, 106.48613], "江北区": [29.575352, 106.532844], "沙坪坝区": [29.541224, 106.4542], "九龙坡区": [29.523492, 106.480989], "南岸区": [29.523992, 106.560813], "北碚区": [29.82543, 106.437868], "綦江区": [29.028091, 106.651417], "大足区": [29.700498, 105.715319], "渝北区": [29.601451, 106.512851], "巴南区": [29.381919, 106.519423], "黔江区": [29.527548, 108.782577], "长寿区": [29.833671, 107.074854], "江津区": [29.283387, 106.253156], "合川区": [29.990993, 106.265554], "永川区": [29.348748, 105.894714], "南川区": [29.156646, 107.098153], "璧山区": [29.593581, 106.231126], "铜梁区": [29.839944, 106.054948], "潼南区": [30.189554, 105.841818], "荣昌区": [29.403627, 105.594061], "开州区": [31.167735, 108.413317], "梁平区": [30.672168, 107.800034], "武隆区": [29.32376, 107.75655], "城口县": [31.946293, 108.6649], "丰都县": [29.866424, 107.73248], "垫江县": [30.330012, 107.348692], "忠县": [30.291537, 108.037518], "云阳县": [30.930529, 108.697698], "奉节县": [31.019967, 109.465774], "巫山县": [31.074843, 109.878928], "巫溪县": [31.3966, 109.628912], "石柱土家族自治县": [29.99853, 108.112448], "秀山土家族苗族自治县": [28.444772, 108.996043], "酉阳土家族苗族自治县": [28.839828, 108.767201], "彭水苗族土家族自治县": [29.293856, 108.166551], "成都": [30.659462, 104.065735], "自贡": [29.352765, 104.773447], "攀枝花": [26.580446, 101.716007], "泸州": [28.889138, 105.443348], "德阳": [31.127991, 104.398651], "绵阳": [31.46402, 104.741722], "广元": [32.433668, 105.829757], "遂宁": [30.513311, 105.571331], "内江": [29.58708, 105.066138], "乐山": [29.582024, 103.761263], "南充": [30.795281, 106.082974], "眉山": [30.048318, 103.831788], "宜宾": [28.760189, 104.630825], "广安": [30.456398, 106.633369], "达州": [31.209484, 107.502262], "雅安": [29.987722, 103.001033], "巴中": [31.858809, 106.753669], "资阳": [30.122211, 104.641917], "阿坝藏族羌族自治州": [31.899792, 102.221374], "甘孜藏族自治州": [30.050663, 101.963815], "凉山彝族自治州": [27.886762, 102.258746], "贵阳": [26.578343, 106.713478], "六盘水": [26.584643, 104.846743], "遵义": [27.706626, 106.937265], "安顺": [26.245544, 105.932188], "毕节": [27.301693, 105.28501], "铜仁": [27.718346, 109.191555], "黔西南布依族苗族自治州": [25.08812, 104.897971], "黔东南苗族侗族自治州": [26.583352, 107.977488], "黔南布依族苗族自治州": [26.258219, 107.517156], "昆明": [25.040609, 102.712251], "曲靖": [25.501557, 103.797851], "玉溪": [24.350461, 102.543907], "保山": [25.111802, 99.167133], "昭通": [27.336999, 103.717216], "丽江": [26.872108, 100.233026], "普洱": [22.777321, 100.972344], "临沧": [23.886567, 100.08697], "楚雄彝族自治州": [25.041988, 101.546046], "红河哈尼族彝族自治州": [23.366775, 103.384182], "文山壮族苗族自治州": [23.36951, 104.24401], "西双版纳傣族自治州": [22.001724, 100.797941], "大理白族自治州": [25.589449, 100.225668], "德宏傣族景颇族自治州": [24.436694, 98.578363], "怒江傈僳族自治州": [25.850949, 98.854304], "迪庆藏族自治州": [27.826853, 99.706463], "拉萨": [29.660361, 91.132212], "日喀则": [29.267519, 88.885148], "昌都": [31.136875, 97.178452], "林芝": [29.654693, 94.362348], "山南": [29.236023, 91.766529], "那曲": [31.476004, 92.060214], "阿里地区": [32.503187, 80.105498], "西安": [34.263161, 108.948024], "铜川": [34.916582, 108.979608], "宝鸡": [34.369315, 107.14487], "咸阳": [34.333439, 108.705117], "渭南": [34.499381, 109.502882], "延安": [36.596537, 109.49081], "汉中": [33.077668, 107.028621], "榆林": [38.290162, 109.741193], "安康": [32.6903, 109.029273], "商洛": [33.868319, 109.939776], "兰州": [36.058039, 103.823557], "嘉峪关": [39.786529, 98.277304], "金昌": [38.514238, 102.187888], "白银": [36.54568, 104.173606], "天水": [34.578529, 105.724998], "武威": [37.929996, 102.634697], "张掖": [38.932897, 100.455472], "平凉": [35.54279, 106.684691], "酒泉": [39.744023, 98.510795], "庆阳": [35.734218, 107.638372], "定西": [35.579578, 104.626294], "陇南": [33.388598, 104.929379], "临夏回族自治州": [35.599446, 103.212006], "甘南藏族自治州": [34.986354, 102.911008], "西宁": [36.623178, 101.778916], "海东": [36.502916, 102.10327], "海北藏族自治州": [36.959435, 100.901059], "黄南藏族自治州": [35.517744, 102.019988], "海南藏族自治州": [36.280353, 100.619542], "果洛藏族自治州": [34.4736, 100.242143], "玉树藏族自治州": [33.004049, 97.008522], "海西蒙古族藏族自治州": [37.374663, 97.370785], "银川": [38.46637, 106.278179], "石嘴山": [39.01333, 106.376173], "吴忠": [37.986165, 106.199409], "固原": [36.004561, 106.285241], "中卫": [37.514951, 105.189568], "乌鲁木齐": [43.792818, 87.617733], "克拉玛依": [45.595886, 84.873946], "吐鲁番": [42.947613, 89.184078], "哈密": [42.833248, 93.51316], "昌吉回族自治州": [44.014577, 87.304012], "博尔塔拉蒙古自治州": [44.903258, 82.074778], "巴音郭楞蒙古自治州": [41.768552, 86.150969], "阿克苏地区": [41.170712, 80.265068], "克孜勒苏柯尔克孜自治州": [39.713431, 76.172825], "喀什地区": [39.467664, 75.989138], "和田地区": [37.110687, 79.92533], "伊犁哈萨克自治州": [43.92186, 81.317946], "塔城地区": [46.746301, 82.985732], "阿勒泰地区": [47.848393, 88.13963], "石河子": [44.305886, 86.041075], "阿拉尔": [40.541914, 81.285884], "图木舒克": [39.867316, 79.077978], "五家渠": [44.167401, 87.526884], "北屯": [47.353177, 87.824932], "铁门关": [41.827251, 85.501218], "双河": [44.840524, 82.353656], "可克达拉": [43.6832, 80.63579], "昆玉": [37.207994, 79.287372], "胡杨河": [44.69288853, 84.8275959], "台湾省": [25.044332, 121.509062], "中西区": [22.28198083, 114.1543731], "湾仔区": [22.27638889, 114.1829153], "东区": [22.27969306, 114.2260031], "南区": [22.24589667, 114.1600117], "油尖旺区": [22.31170389, 114.1733317], "深水埗区": [22.33385417, 114.1632417], "九龙城区": [22.31251, 114.1928467], "黄大仙区": [22.33632056, 114.2038856], "观塘区": [22.32083778, 114.2140542], "荃湾区": [22.36830667, 114.1210792], "屯门区": [22.39384417, 113.9765742], "元朗区": [22.44142833, 114.0324381], "北区": [22.49610389, 114.1473639], "大埔区": [22.44565306, 114.1717431], "西贡区": [22.31421306, 114.264645], "沙田区": [22.37953167, 114.1953653], "葵青区": [22.36387667, 114.1393194], "离岛区": [22.28640778, 113.94612], "花地玛堂区": [22.20787, 113.5528956], "花王堂区": [22.1992075, 113.5489608], "望德堂区": [22.19372083, 113.5501828], "大堂区": [22.18853944, 113.5536475], "风顺堂区": [22.18736806, 113.5419278], "嘉模堂区": [22.15375944, 113.5587044], "路凼填海区": [22.13663, 113.5695992], "圣方济各堂区": [22.12348639, 113.5599542] }
+  </script>
 </body>
+
 </html>
-
-

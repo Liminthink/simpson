@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>WHYO: 李老师推特热点地图</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts/map/js/china.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/2.3.1/list.min.js"></script>
+  <style>
+body{margin: 0; overflow:hidden}
+
+main article, #tbl { height: 100vh; }
+article { display: flex; flex-direction: column; position: relative; overflow: hidden; }
+#tbl { display:block; overflow-y: scroll; }
+.rt { position: absolute; top: 20px; right: 20px; padding: 8px 16px; border: none; border-radius: 4px;}
+#b{ cursor: pointer; z-index: 99; transition: 0.3s; font-weight: bold; }    
+
+/* 地图占上半部分，支持垂直缩放 */
+#m { width: 100%; height: 60%; resize: vertical; overflow: hidden;  flex-shrink: 0; }
+/* 下方分栏视图 */
+#c { display: flex; flex: 1; min-height: 0; background:#9E9E9E}
+.dark #c {background:#181b38}
+body:has(.dark){background:#323553}
+/* 词云支持水平缩放 */
+#wc { width: 50%; resize: horizontal; overflow: hidden; flex-shrink: 0; }
+/* 排行榜与饼图平分剩余空间 */
+#bar, #pie { flex: 1; min-width: 0; }
+
+#grd {
+  height: 100vh; display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2列 */
+  grid-template-rows: repeat(2, 1fr);    /* 2行 */
+  gap: 14px;                             /* 较大的间距更有呼吸感 */
+  padding: 24px;
+    box-sizing: border-box;
+}
+
+#grd article:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-4px);
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.3, 1);
+}
+
+/* 评论区样式核心 */
+.list { list-style: none; padding: 0; }
+.item { backdrop-filter: sepia(1); padding: 20px; margin-bottom: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.meta { color: #888; font-size: 16px; margin-bottom: 8px; display: flex; gap: 12px; }
+.heat { color: #57ebe4; font-weight: bold; }
+.type { background: #fef2f2; padding: 2px 6px; border-radius: 4px; }
+.bg { font-weight: bold; font-size: 15px; margin-bottom: 6px; color: #333; }
+.desc { font-size: 24px; line-height: 1.6; color: #aaa; }
+
+/* 默认的弹簧/线性动画可能不够柔和，我们可以定制 hero-article 的过渡 */
+::view-transition-group(hero) {
+  animation-duration: 0.4s;
+  animation-timing-function: cubic-bezier(0.25, 1, 0.3, 1); /* 更丝滑的缓动曲线 */
+}
+  </style>
+</head>
+<body>
+<main id=main></main>
+<div id=grd>
+  <article id=a0>
+    <button id="b" class="rt"></button>
+    <div id="m"></div>
+    <div id="c">
+      <div id="wc" class="b-box"></div>
+      <div id="bar" class="b-box"></div>
+      <div id="pie" class="b-box"></div>
+    </div>
+  </article>
+
+</div>
+<article id=tbl>
+  <ul class="list"></ul>
+  <div class="rt">
+    <input class="search" placeholder="搜索地域、内容或类型..." />
+    <a class="sort type" data-sort="heat">冰感📈</a>
+    <a class="sort type" data-sort="loc">地域📈</a>
+  </div>
+  <img height="100%">
+</article>
+
+  <script>
+let $$=localStorage
+
+readTwit = (p,csv) => csv.trim().split('\n').forEach(r => {
+  let m = r.split(',')//r.match(/^([^,]+),([^,]+),(\d+),(.*)$/)
+  if (!m) return
+  
+  let [ loc, t, h,dt,url, d] = m,
+      [c, n] = loc.trim().split(/\s+/),
+      v = +h
+  
+  // 基础实体: 直接灌入 List.js 或 UI 模板
+  if(t)rows.push({ loc,dt, type: t, heat: v, url, bg: ({'上访':'brown','国际':'blue'})[t] ?? '#fef2f2', desc: d })
+  
+  // 衍生聚合: Echarts 地图、词云、柱状图所需状态
+  // 双向兼容：保留原 c, v 字段，并注入 name, value 以适配标准图表 Tooltip 遍历
+  ;[n, 'all'].forEach(k => {
+    let s = p[k] = p[k] || { name: k === 'all' ? '全国' : n, value: 0, arr: [], tg: {}, kw: '' }
+    s.value += v
+    s.arr.push({ c, v, name: c, value: v })
+    
+    let g = s.tg[t] = s.tg[t] || { c: 0, h: 0 }
+    g.c++
+    g.h += v
+    s.kw += d
+  })
+  p['全月地图']=p.all
+})
+i0Row=0,cRow=[]
+const segmenter = new Intl.Segmenter('zh', { granularity: 'word' });
+
+draw = (el, p, {ti='两行三列', s = 2}) => {
+  let cur = 'all', aRow=[...rows.slice(i0Row)]; i0Row=rows.length; cRow=rows // 封装状态s，并引入焦点省份cur
+  let [btn,...viz] = el.querySelectorAll(`#b, #m,#wc,#bar,#pie`)
+  let [chart,wc,bar,pie]=viz.map(e=>echarts.getInstanceByDom(e)?? echarts.init(e))
+
+  chart.on('click', e => {
+    cur = (p[e.name])? e.name : null;
+    cRow=(!cur||cur=='all')?aRow: (cur=='全月地图'? rows:aRow).filter(u=>u.loc.endsWith(cur))
+    render()
+  })
+  btn.onclick = () => { s = (s + 1) % 4; render() }
+  let d = Object.values(p).map(x => (x.arr.sort((a, b) => b.v - a.v), x)), fontSize=18, scaleLimit= { min: 1.6, max: $$.F11? 6:4 }
+  
+//chart.dispatchAction({ type: 'geoRoam', zoom: 2 })
+  chart.on('georoam', (p) => {
+    if (!p.zoom)return
+    let z = chart.getOption().series[0].zoom, f=x=>chart.dispatchAction({type: 'restore'})
+    if (z <= scaleLimit.min+.1) {
+  cRow=(!cur||cur=='all')?aRow: (cur=='全月地图'? rows:aRow).filter(u=>u.loc.endsWith(cur))
+      seeCmt(cRow)
+      f(nav('csv'))
+    } // 抵近 scaleLimit.min
+    if (z >= scaleLimit.max) {$$.F11=true;f(nav(el))}
+  })
+  let XX=0b0, L={triggerEvent: true,left: 'center'}; // 2个触发条件
+
+  for(let u of [bar,pie]) u.on('click', (p) => {
+    if (p.componentType !== 'title') return p.event.stop();
+    
+    // 翻转逻辑：基于存在的过滤，而不是真假取反
+    XX^=2**(u==bar? 1:2)
+    render();
+  });
+  
+  let render = () => {
+    let isD = s > 1, isN = s % 2 === 0
+    let bg = isD ? '#111328' : '#b8bfc5', tc = isD ? '#ffffff' : '#333333'
+    
+    el.classList.toggle('dark', isD)
+    btn.innerText = ['☀️ 日间', pick(['☀️ 太阳', 60, '🌞 将军', 20, '😼 雪花猫',20]), '🌙 夜间', pick(['🌙 月亮', 80, '🌑 月球', 20])][s]
+    btn.style.background = isD ? '#2a2d52' : '#f0f0f0'
+    btn.style.color = tc
+    el.style.background = bg
+    chart.setOption({
+      title: { text: ti, left: 20, top: 20, textStyle: { color: tc } },
+      tooltip: {
+        backgroundColor: isD ? 'rgba(20,22,48,0.9)' : '#fff', textStyle: { color: isD ? '#eee' : '#666',fontSize }, borderColor: isD ? '#3a3d6a' : '#eee',
+        formatter(x) {
+          if (!x.data?.arr) return x.name
+          let h = `<div style="font-weight:bold;margin-bottom:8px">${x.name}</div><div>总热度: <span style="color:${isD?'#9b63f8':'#0078D7'}">${x.data.value}</span></div>其中包含<div style="border-top:1px solid ${isD?'#333':'#eee'};padding-top:10px;margin-top:10px;font-size:12px"></div>`
+          x.data.arr.forEach(i => h += `<div style="margin-top:6px">${i.c}市: ${i.v}</div>`)
+          return h
+        }
+      },
+      visualMap: { left: 30, bottom: 30, min: 100, max: 5000, text: ['高', '低'], textStyle: { color: isD ? '#999' : '#666' }, inRange: { color: isD ? ['#21224d', '#7d46f6'] : ['#d6f0fd', '#0078d7'] }, calculable: true, itemHeight: 80 },
+      series: [{
+        type: 'map', map: 'china', roam: true, 
+        scaleLimit, zoom:1.8,
+        nameMap: { '台湾': '🇹🇼', '香港': '🇭🇰', '澳门': '', '南海诸岛':'全月地图' },
+        label: { show: isN, color: isD ? '#aaa' : '#666', fontSize: main.childElementCount? 16:10 }, data: d,
+        itemStyle: { areaColor: isD ? '#1a1c3a' : '#eef6fc', borderColor: isD ? '#2b2e5a' : '#b4d6eb', borderWidth: 1 },
+        emphasis: { label: { show: true, color: isD ? '#fff' : '#000', textBorderColor: isD ? '#000' : '#fff', textBorderWidth: 2 }, itemStyle: { areaColor: isD ? '#7d46f6' : '#fcd271', borderColor: isD ? '#a16cff' : '#ffb300', borderWidth: 2, shadowBlur: 15, shadowColor: isD ? 'rgba(161, 108, 255, 0.8)' : 'rgba(255, 179, 0, 0.8)' } }
+      }]
+    }, )
+
+    let tg, wf = {}, wd
+    pr = p[cur]?? p.all
+    tg=Object.entries(pr.tg)
+if(!wd){
+    // 简易双字切词算法投射分词数据流
+const segments = segmenter.segment(pr.kw || "");
+
+for (const {segment: w, isWordLike} of segments) {
+  if (isWordLike && !/^.$|\d/.test(w)) { // 过滤掉单字和标点
+    wf[w] = -~wf[w]; 
+  }
+}
+
+// 3. 转化为 ECharts 词云/柱状图格式
+wd = Object.entries(wf).slice(0, 16).map(([name, value]) => ({ name, value }));
+}    
+    wc.setOption({
+      title: { text: `${pr.name} 推文词云`, left: 'center', textStyle: { color: tc, fontSize } },
+      tooltip: { show: true },
+      series: [{ type: 'wordCloud', shape: 'rect', sizeRange: [12, 55], rotationRange: [-45, 45], textStyle: { color: () => '#' + Math.floor(Math.random() * 16777215).toString(16) }, data: wd }]
+    }, )
+
+if (XX&2**1) {
+  // 聚合各个省份的热度 (c 是 loc 按空格切割的第一部分)
+  let provMap = {};
+  cRow.forEach(r => {
+    let prov = r.loc.split(/\s+/)[0]; 
+    provMap[prov] = (provMap[prov] || 0) + r.heat;
+  });
+
+  // 转为数组并按热度升序排序 (Echarts 横向柱状图通常需要升序以在顶部显示最大值)
+  let sortedProv = Object.entries(provMap).sort((a, b) => a[1] - b[1]);
+
+  bar.setOption({
+    title: { ...L, text: '省份热度排名', left: 'center' },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'value', name: '热度' },
+    yAxis: { 
+      type: 'category', 
+      data: sortedProv.map(item => item[0]), // 省份名称
+      axisLabel: { interval: 0 } 
+    },
+    series: [{
+      type: 'bar',
+      data: sortedProv.map(item => item[1]), // 热度数值
+      itemStyle: { borderRadius: [0, 4, 4, 0], color: '#5470c6' },
+      label: { show: true, position: 'right' }
+    }]
+  }, true); // 加上 true 表示不与旧配置合并，彻底替换
+}else{
+    let bd = tg.map(([k, v]) => ({ name: k, value: v.c })).sort((a, b) => a.value - b.value)
+    bar.setOption({
+      title: { ...L, text: `🕹${pr.name} 事件榜 (热门)`, textStyle: { color: tc, fontSize } },
+      tooltip: { trigger: 'axis' },
+      grid: { left: '15%', right: '10%', bottom: '15%', top: '20%' },
+      xAxis: { type: 'value', splitLine: { lineStyle: { color: isD ? '#333' : '#eee' } } },
+      yAxis: { type: 'category', data: bd.map(x => x.name), axisLabel: { color: tc } },
+      series: [{ type: 'bar', data: bd.map(x => x.value), itemStyle: { color: isD ? '#9b63f8' : '#0078D7' } }]
+    }, true)
+}
+
+if (XX&2**2) {
+// 1. 极简聚合：直接生成 dataset 需要的二维数组 [['第1周', 10], ['第2周', 15]]
+  let wm = {};
+  cRow.forEach(r => {
+    let w = `月度第${Math.ceil(new Date(r.dt).getDate() / 7)}周`;
+    wm[w] = (wm[w] || 0) + 1;
+  });
+
+  // 2. 极简配置：利用 dataset 自动映射数据
+  pie.setOption({
+    title: { ...L, text: '按周贴文数量', left: 'center' },
+    dataset: { source: Object.entries(wm) }, // 核心：数据全塞这里，Echarts 自己认
+    xAxis: { type: 'category' },
+    yAxis: { type: 'value' },
+    series: [
+      { type: 'bar', barWidth: 4, colorBy: 'data' }, // 茎
+      { type: 'scatter', symbolSize: 16, colorBy: 'data', label: { show: true, position: 'top' } } // 叶（带数字）
+    ]
+  }, true);
+}else{
+    let pd = tg.map(([k, v]) => ({ name: k, value: v.h }))
+    pie.setOption({
+      title: { ...L, text: `🕹${pr.name} 事件热度`, left: 'center', textStyle: { color: tc, fontSize } },
+      tooltip: { trigger: 'item' },
+      series: [{ type: 'pie', radius: ['40%', '70%'], center: ['50%', '55%'], data: pd, itemStyle: { borderColor: isD ? '#181b38' : '#fff', borderWidth: 2 } }]
+    }, true)
+}
+
+  }
+
+  let obs = new ResizeObserver(es => es.forEach(e => {
+    echarts.getInstanceByDom(e.target)?.resize()
+    let w=e.contentRect.width
+    if(e.target.id=='wc') wc.setOption({series: [{type: 'wordCloud', sizeRange: [w / 20, w / 8]}]})
+    if(e.target.id=='m')render()//标题与位置匹配
+  }))
+  viz.forEach(x => obs.observe(x))
+  render()
+  bar.on('click',linkSearch)
+  wc.on('click', linkSearch);
+
+}
+
+pick = (a, r = Math.random() * a.reduce((s, v, i) => i % 2 ? s + v : s, 0)) => a[a.findIndex((v, i) => i % 2 && (r -= v) < 0) - 1];
+day2simp = [
+  s => new Date(23, parseInt(s[0], 36) - 1, s.slice(1))
+,
+  (d = new Date()) => 
+    (d.getMonth() + 1).toString(36) + 
+    (d.getDate() + '').padStart(2, 0)
+]
+// UI渲染：直接构建符合 List.js 要求的 DOM 结构
+seeCmt = (data) => {
+  let e = document.querySelector('.list')
+  e.innerHTML = data.map(x => `
+    <li class="item">
+      <div class="meta">
+        <span class="loc">${x.loc}</span>
+        <a href="${x.url}">${x.dt}</a>
+        <span> <b class="heat">-${x.heat}°C</b></span>
+        <span class="type"  style="background:${x.bg}">${x.type}</span>
+      </div>
+      <div class="desc">${x.desc}</div>
+    </li>
+  `).join('')
+
+  // 初始化 List.js: 绑定 class 名即可实现 Table 功能
+  cTbl=new List('tbl', {
+    valueNames: ['loc', 'type', 'heat', 'bg', 'desc']
+  })
+  const searchInput = document.querySelector('#tbl .search');
+  
+document.querySelectorAll('#tbl .sort').forEach(el => {
+  // 仅针对你希望默认降序的字段，比如 'heat'
+  if(el.dataset.sort === 'heat') {
+    el.classList.add('asc'); 
+  }
+});
+
+linkSearch = ({name:s, componentType:ct}) => {
+  if (ct == 'title') return 
+  seeCmt(cRow)
+  searchInput.value = s;
+  // 2. 执行 List.js 搜索
+  cTbl.search(s);
+  nav('csv')
+};
+
+  //if(e.offsetHeight<=e.scrollHeight)e.insertAdjacentHTML('beforeEnd', `<img height=${e.offsetHeight}>`)
+}
+
+seeCmt([{}])
+  </script>
+  
+<script>
+
+csvs=
+`武汉 湖北,维权,2209,2024-03-04,and,3月8日，湖北省武汉市，武汉市“江油”国控市政建设集团有限公司承建江油乡村振兴江油农民就业基地（一期）“江油”市B地块,一期一标段，居民聚集维权。居民反映：电池厂的建造选址就位于小区旁边隔壁200米。
+黄冈 湖北,投诉,1450,2024-03-05,and,黄冈市罗田县居民反映自来水浑浊问题，要求相关部门尽快解决水质安全。
+襄阳 湖北,维权,800,2024-03-06,and,襄阳市樊城区某楼盘延期交房，业主集体要求退房赔偿。
+长沙 湖南,求助,1200,2024-03-07,and,长沙某校学生求助，关于住宿费退费流程不透明。
+呼和浩特 内蒙古,建议,300,2024-03-08,and,市民建议增加共享单车投放点。
+台北 台湾,维权,500,2024-03-09,and,市民抗议公共设施老化问题。
+--
+## 广州 广东,投诉,1800,2024-03-11,and,广州市天河区居民反映夜间施工噪音扰民，严重影响正常休息。
+成都 四川,维权,2100,2024-03-12,and,成都市高新区某长租公寓爆雷，租客和房东聚集要求退还押金和租金。
+杭州 浙江,建议,650,2024-03-13,and,市民建议在地铁换乘站增加无障碍电梯，方便老年人和残障人士出行。
+西安 陕西,求助,900,2024-03-14,and,未央区部分老旧小区近期停水停电频发，居民求助解决基础设施老化问题。
+--
+## 郑州 河南,维权,3200,2024-03-18,and,某制造工厂拖欠工人近三个月工资，工人聚集要求相关部门介入讨薪。
+深圳 广东,投诉,1500,2024-03-19,and,多名外卖骑手投诉平台随意扣罚派送费，要求优化派单和考核算法。
+合肥 安徽,求助,400,2024-03-20,and,部分高校应届毕业生求助，称被某科技公司试用期无故辞退且未给任何补偿。
+南京 江苏,建议,750,2024-03-21,and,市民建议增加灵活就业人员的社保补贴渠道和线下办理网点。
+--
+北京 北京,维权,2800,2024-03-25,and,海淀区某知名连锁早教机构突然闭店跑路，家长集体登记要求退还预交学费。
+上海 上海,投诉,1350,2024-03-26,and,多名消费者集中投诉某电商平台大促期间“先涨后降”，涉嫌虚假宣传和价格欺诈。
+武汉 湖北,求助,600,2024-03-27,and,大学生求助，在二手交易平台购买电子产品遭遇连环诈骗，希望相关部门加快处理。
+济南 山东,建议,450,2024-03-28,and,家长建议市场监管局规范中小学周边文具店售卖的“盲盒”类产品，避免诱导未成年人消费。
+重庆 重庆,投诉,1100,2024-03-29,and,渝北区居民反映某化工厂夜间疑似偷排废气，导致周边空气经常伴有刺鼻异味。
+苏州 江苏,建议,850,2024-03-30,and,市民建议在早晚高峰时段增加工业园区主干道的公交车班次，缓解通勤拥堵。
+大连 辽宁,维权,1600,2024-03-31,and,某小区地下车库因暴雨倒灌导致多辆私家车受损，业主联名要求物业公司承担赔偿责任。
+昆明 云南,求助,500,2024-04-01,and,部分农户求助，近期极端冰雹天气导致花卉等经济作物受损严重，希望能申请农业防灾减灾补贴。`.split('\n--\n')
+
+let kCsv, season=0
+
+let rows=[], e0=a0, pLoad=(e,s,i, p=[])=>{readTwit(p,s);draw(e, p, {ti:"❄ WHYO."+excelForm(` ${kCsv}${day2simp[+1](new Date(23, 0, 1+7*i))}`)})}
+e0.remove();e0.removeAttribute('id')
+art=i0=>Array(4).fill().map((_,i,e)=>{
+  if(4!=grd.childElementCount){e=e0.cloneNode(true);grd.append(e)} else e=grd.children[i]
+  let ik=Math.max(0, i0+i)%csvs.length
+  pLoad(e, csvs[ik], season+ik+i)
+  return ik
+})
+
+
+
+{
+
+  // --- 退出机制 (Scroll Boundaries) ---
+  let lastY = 0, i0=0, e0
+  tbl.onscroll = () => {
+    if (tbl.scrollTop <= 0) nav('csv')
+  }
+
+nav=k=>{
+  let fx=(A,B)=>{let c=document.body.style;c.pointerEvents='none'; document.startViewTransition?.(()=>A.prepend(B))?.finished?.then(_=>c.pointerEvents='unset') ?? A.prepend(B)}
+  
+  if(k.nodeType){
+    //k.requestFullscreen().catch(ex=>alert('请先选中省份再全屏查看哦')); document.exitFullscreen()
+    k.style.viewTransitionName = 'hero'
+    if(e0) {fx(grd,e0); $$.F11=e0.style.viewTransitionName = ''}
+    if(e0!=k) fx(main,e0=k); else e0=null
+    setTimeout(()=>scrollTo(0,0),500) //FIXME lastY 乱序、title更新导致跳变
+  } else 
+  if(k=='csv'){
+    //if(e1) {document.body.append(e1);e1=null;nav(e0)} else main.append(e1=tbl)
+    tbl.scrollTop+=3
+    ;(lastY++%2?main:tbl).scrollIntoView({behavior:'smooth'})
+  } else {
+    //开始pager
+    i0+=k
+    art_=art(i0)
+    location.hash=excelForm(excelForm(location.hash).replace(/...$/, day2simp[+1](new Date(23, 0, i0+1))))
+    for(let e of grd.children) echarts.getInstanceByDom(e)?.resize()
+  }
+}
+
+  grd.onwheel = grd.onclick = (ev,Y) => {
+    // 滚动触底判定 (容差 1px 应对小数像素)
+    Y=ev.deltaY
+    if (ev.target==grd) {
+      if(Y!=null) nav(Y >= 0? +1:-1)
+      else nav(-1)
+    }
+  }
+
+}
+excelForm=s=>s.replace(/(?<=.{3})(.)(.)/,'$2$1')
+excelForm(location.hash)
+.replace(/#(\d{2}[ABCD])([0-9a-c]{3})/, (m, A,B)=>{
+  kCsv=A
+  fetch(A+'.csv').then(r=>r.ok? r.text() : Promise.reject(alert('未爬取该年季度数据'+A),nav(0))).then(r=>{
+    csvs=r.split('\n--\n')
+    nav(doy-season -1);setTimeout(()=>scrollTo(0,0),500)
+    if($$.F11) nav(grd.children[0])
+  })
+  let k="ABCD".indexOf(kCsv[2]), doy = Math.round((+day2simp[0](B) - new Date(23, 0, 0)) / 864e5);
+  season=[0, 90, 181, 273][k]
+})
+
+if(!kCsv) location.reload(location='#262A19')
+</script>  
+
+</body>
+</html>
+
+
