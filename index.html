@@ -4,10 +4,15 @@
 <head>
   <meta charset="utf-8" />
   <title>WHYO | 中国维权时局图</title>
-  <meta name="description" content="《雪花周报》是 X.com 中文大V李老师推文的省份、城市、话题数据可视化，归档了历年爆料的文本和时间趋势。">
+  <meta name="description" content="《雪花周报》是 X.com 中文大V李老师推文按照省份、城市、话题数据的可视化，归档了历年爆料的文本和时间趋势。">
+  <link rel="icon" href="favicon.png" sizes="256x256">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script src="https://cdn.jsdelivr.net/npm/leaflet-boundary-canvas@1.0.0/src/BoundaryCanvas.min.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/@antv/l7@2.9.0/dist/l7.js"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
@@ -29,8 +34,35 @@
       padding: 0;
     }
 
+    @media (orientation: portrait) {
+      nav * {
+        font-size: 20px;
+      }
+
+      .lm_title {
+        font-size: 22px !important;
+      }
+
+      .lm_close_tab,
+      nav .text-gray-500.text-\[10px\] {
+        display: none;
+      }
+    }
+
+    .lm_tab {
+      height: 100% !important;
+    }
+
+    .lm_title {
+      font-size: 14px;
+    }
+
     #map {
       height: 100vh;
+    }
+
+    :has(~ .lil-gui) .leaflet-control-zoom {
+      opacity: 0;
     }
 
     filter#hue-grep1 {
@@ -60,6 +92,11 @@
 
     .pnt {
       font: 20px sans;
+    }
+
+    .marker-cluster-small div {
+      background: radial-gradient(rgba(110, 204, 57), green);
+      text-shadow: -1px 1px #CCC;
     }
 
     #map[dark="darker"] {
@@ -206,10 +243,10 @@
       // 1. 初始化地图
       only1(nv1, tog(`bg-[#112a1e] border border-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.2)]`))
       document.styleSheets.onAdd()
-      let [f11, { children: [dark] }, num, share, { children: [_ic, srch] }, tbl] = nv2.children
+      let [f11, { children: [dark] }, share, { children: [_ic, srch] }, num, tbl] = nv2.children
       share.onclick = () => alert('链接已复制！')
       f11.onclick = () => map.requestFullscreen().then(() => gui.updateSize())
-      dark.onchange = () => { if (dark.value != 'globe') { map.setAttribute('dark', dark.value) } else { map.innerHTML = ''; globe(); dark.value = 'darker' } }
+      dark.onchange = () => { if (dark.value != 'globe') { map.setAttribute('dark', dark.value) } else { map.innerHTML = ''; globe(); map.setAttribute('dark', 'darker') } }
       tbl.onclick = () => togMap()
       num.onclick = () => togMap(0b1)
       srch.onchange = () => seeAll(p.filter(u => u.desc.includes(srch.value)))
@@ -218,34 +255,49 @@
         obs = new ResizeObserver(es => es.forEach(e => {
           echarts.getInstanceByDom(e.target)?.resize()
           let w = e.contentRect.width
-          if (e.target.id == 'wc') wc.setOption({ series: [{ type: 'wordCloud', sizeRange: [w / 10, w / 4] }] })
+          if (e.target.id == 'wc') wc.setOption({ series: [{ type: 'wordCloud', sizeRange: [w / 10, w / cMap.lWord] }] })
         }))
       viz.forEach(x => { obs.observe(x); window[x.id] = echarts.init(x) })
 
 
-      readTwit(p = [], csvs[0])
 
-      const map1 = MapRect('map', id => {
-      }, seeAll = k => {
-        let a = k.substr ? p.filter(u => u.loc.includes(k)) : k
-        num.innerText = a.length
-        seeCmt(a)
-        seeTop(a)
-        seeWeek(a)
-        seeWd(a.map(u => u.desc).join(''), k.substr ? k : `手气不错`)
-      }, (k, v, n) => {
-        if (!(n = city[k])) { return }
-        v.setStyle({
-          fillOpacity: 0.7
-        })
-        v.bindTooltip(`<b>${k}</b><br>当前总热度: ${n}`)
-      }),
+      window.cMap = { crop: true, p_line: true, emo: '🌈🌹🌏', kHeat: 2, kPos: 1, kBnd: 1.5, lWord: 4, modeHot: 'views' }
+
+      let map1, onMap = (city, g) => {
+        readTwit(p = [], csvs[0])
+        if (map1) {
+          g = map.lastChild
+          map.outerHTML = '<div id="map">';
+        }
 
         city =
           _.chain(p)
             .groupBy(item => item.loc.split(' ')[1]) // 按省份分组
             .mapValues(items => _.sumBy(items, 'heat')).value();
 
+
+        map1 = MapRect('map', id => {
+        }, seeAll = k => {
+          let a = k.substr ? p.filter(u => u.loc.includes(k)) : k
+          num.innerText = a.length
+          seeCmt(a)
+          seeTop(a)
+          seeWeek(a)
+          seeWd(a.map(u => u.desc).join(''), k.substr ? k : `手气不错`)
+        }, (k, v, n) => {
+          if (!(n = city[k])) { return }
+          let kh = cMap.kHeat, k1 = _.max(Object.values(city))
+          v.setStyle({
+            fillOpacity: (kh == 2) ? 0.7 : (kh * n / k1)
+          })
+          v.bindTooltip(`<b>${k}</b><br>当前总热度: ${n}`)
+        })
+        if (g) map.append(g)
+      }
+
+      onMap()
+      MapRect.UI(cMap, onMap)
+      MapRect.DateUI({ A: With(new Date, d => d.setDate(d.getDate() - 6)), B: new Date, onchange: console.log })
       // 2. 调用map函数，绘制数据
       map1([
         ['南京 江苏', 'id-nanjing'],
@@ -268,26 +320,19 @@
       '香港': [22.31, 114.17], '澳门': [22.19, 113.54], '大理': [25.61, 100.27], '乌鲁木齐': [43.82, 87.61]
     };
 
-    let tog = (cs) => e => cs.split(' ').map(s => e.classList.toggle(s)),
+    navigator.serviceWorker?.register?.('./sw.js') 
+    let With = (u, f) => (f(u), u),
+      tog = (cs) => e => (cs.split(' ').map(s => e.classList.toggle(s)), this.seeAll?.(p.slice(0, p.length * Math.random()))),
       only1 = (e0, op, i = 0, cs = e0.children) => (e0.onclick = ev => { if (!i.nodeType) { op(i = cs[i]); return } op(i); op(i = ev.target) })(),
       findAll = (obj, is) => (typeof obj == 'object') ? [...(is(obj) ? [obj] : []), ..._.flatMap(obj, v => findAll(v, is))] : [];
 
     document.styleSheets.onAdd = () => [...document.styleSheets].flatMap(u => { try { return [...u.rules] } catch { } }).forEach((u, _, m, e, e0) => {
       if (m = /^filter#(\D+?)(\d+)/.exec(u?.selectorText)) {
-        e0 = cssSvg.querySelector(`#${m[1]}0`); e = e0.cloneNode(true); e.id = m[1] + m[2];
+        e0 = css_paint.querySelector(`#${m[1]}0`); e = e0.cloneNode(true); e.id = m[1] + m[2];
         e0.parentNode.append(e)
       }
     })
 
-
-
-      + async function initCityDB() {
-        const res = await fetch('https://unpkg.com/province-city-china@latest/dist/city.json').then(r => r.json());
-
-        // 一行代码：分组、映射、并把 "lng,lat" 字符串反转为 [lat, lng] 数字数组
-        //CHINA_CITIES_DB = _.pickBy(_.mapValues(_.keyBy(res, 'name'), c => c.location ? _.map(c.location.split(','), Number).reverse() : null));
-
-      }()
 
     csvs =
       `武汉 湖北,维权,2209,2024-05-04,and,3月8日，湖北省武汉市，武汉市“江油”国控市政建设集团有限公司承建江油乡村振兴江油农民就业基地（一期）“江油”市B地块,一期一标段，居民聚集维权。居民反映：电池厂的建造选址就位于小区旁边隔壁200米。
@@ -315,7 +360,7 @@
 
   <nav>
     <div
-      class="w-full h-12 bg-[#0d0f12] border border-[#1f242e] px-4 py-2 flex items-center justify-between text-xs font-mono select-none rounded">
+      class="w-full bg-[#0d0f12] border border-[#1f242e] px-4 py-2 flex items-center justify-between text-xs font-mono select-none rounded">
 
       <div id=nv1 class="flex items-center space-x-1 bg-[#161a22] border border-[#242b38] p-1 rounded">
         <button
@@ -338,9 +383,9 @@
         <span class="text-gray-500 text-[10px]">v2.1</span>
         <span class="text-gray-500 text-[10px]">@WhyYou<u><a target=_blank
               href=https://x.com/whyyoutouzhele/media>touzhele</a></u></span>
-        <span
+        <span id=icSetup
           class="bg-[#e11d48] text-white font-extrabold px-1.5 py-0.5 rounded text-[10px] tracking-tight border border-[#fb7185] shadow-[0_0_10px_rgba(225,29,72,0.4)]">
-          2026A103
+          2026A103 🧰 ⚙️
         </span>
       </div>
 
@@ -359,13 +404,9 @@
           <span class="absolute right-2 text-[8px] text-gray-500 pointer-events-none">▼</span>
         </div>
 
-        <div
-          class="bg-[#eab308] text-black font-black rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
-          23</div>
-
         <button
           class="flex items-center bg-[#161a22] border border-[#2e374a] px-2 py-1 rounded text-gray-300 gap-1 hover:bg-[#202734] cursor-pointer">
-          <span class="text-blue-400">🔀</span> 分享
+          <span class="text-blue-400">📰</span> 分享
         </button>
 
         <div class="relative flex items-center">
@@ -373,6 +414,10 @@
           <input type="search" placeholder="搜索..."
             class="bg-[#161a22] border border-[#2e374a] pl-7 pr-2 py-1 rounded text-gray-300 placeholder-gray-500 outline-none w-28 focus:border-blue-500 focus:shadow-[0_0_8px_rgba(59,130,246,0.3)] transition-all text-xs">
         </div>
+
+        <div
+          class="bg-[#eab308] text-black font-black rounded-full w-9 h-9 flex items-center justify-center text-[10px]">
+          23岁</div>
 
         <button
           class="flex items-center bg-[#13233c] border border-[#2563eb] px-2 py-1 rounded text-[#60a5fa] gap-1 hover:bg-[#1a3358] cursor-pointer">
@@ -393,6 +438,7 @@
   <script type="module">
     // 直接从 CDN 导入标准的 ES 模块，彻底解决全局变量未定义问题
     import { GoldenLayout } from 'https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/+esm';
+    import GUI from 'https://esm.sh/lil-gui';
     navigator.iOS = !matchMedia("(orientation: landscape)").matches
 
     window.togMap = (id) => {
@@ -426,20 +472,23 @@
             componentType: 'wc-component',
             title: '⚡ 热度词云',
           },
-          { type: 'component', componentType: 'aigc-component', title: '🤖 话题洞察' },
+          { type: 'component', componentType: 'aigc-component', title: navigator.iOS ? '🤖' : '🤖 话题洞察' },
           ]
         },
         {
           type: 'component',
           componentType: 'liner-component',
           height: 30,
-          title: '📰 本周情报总数',
+          title: navigator.iOS ? '📈' : '📈 本周情报总数',
         }
       ]
     }
     const
       config = {
         settings: { showPopoutIcon: false, },
+        dimensions: {
+          headerHeight: navigator.iOS ? 35 : 30
+        },
         root: {
           type: 'row',
           content: [
@@ -489,12 +538,11 @@
     reg('pie')
     reg('aigc')
 
-
     gui.registerComponentFactoryFunction('text-component', function (container, itemConfig) {
       const state = itemConfig.componentState || {};
       container.element.innerHTML = `
             <div class="component-container">
-                <img src="a.png" onclick="seeAll(p.slice(0,p.length*Math.random()))">
+                <img src="old/a.png" onclick="seeAll(p.slice(0,p.length*Math.random()))">
             </div>
         `;
     });
@@ -506,8 +554,207 @@
     window.addEventListener('resize', () => {
       gui.updateSize();
     });
+
+    /**
+ * 创建一个仅限于中国区域的二维地图实例
+ * @param {function} onMarkerClick - 浮标点击事件的回调函数
+ * @returns {function} - 绘制浮标[k:v,]的函数
+ */
+    window.MapRect = (el, onMarkerClick, ..._3) => {
+      // 步骤2: 定义中国的地理边界
+      const chinaBounds = L.latLngBounds(
+        L.latLng(10, 64), // 西南角
+        L.latLng(54, 145) // 东北角
+      );
+
+      // 步骤3: 初始化地图，并应用限制
+      const u = L.map(el, {
+        center: [36, 109],      // 地图中心点设为中国
+        zoom: 5,                // 初始缩放级别
+        minZoom: 4, maxZoom: 6,             // 最小缩放级别，防止过度缩小
+        maxBounds: chinaBounds, // 设置地图拖拽边界
+        maxBoundsViscosity: 1.0, // 设置边界为“硬”边界，无法拖出
+        attributionControl: false
+      });
+      L.control.attribution({ prefix: L.Control.Attribution.prototype.options.prefix.replace('Leaflet', '') }).addTo(u);
+
+      mapHov(u, ..._3)
+      mapDragRect(u)
+
+      u.attributionControl._container.onclick = () => confetti.ukraine()
+      if (window.icTalk) icTalk.onclick = ({ target: e }) => {
+        '?' || L.popup()
+          .setLatLng(u.containerPointToLatLng([e.offsetLeft + 50, e.offsetTop]))
+          .setContent('hi')
+          .openOn(u)
+
+        {
+          let A = (min, max) => Math.random() * (max - min) + min;
+
+          confetti({
+            angle: 55,
+            spread: A(50, 70),
+            particleCount: A(50, 100),
+            origin: { y: 0.8, x: 0 },
+            scalar: 2,
+            shapes: ['star'].concat([...Object.values(emo), ..."🌈🌹🌏"].map(s => confetti.shapeFromText({ text: s, scalar: 2 })))
+          });
+        }
+      }
+
+      // 返回核心的绘图函数
+      const markerLayer = L.markerClusterGroup({ zoomToBoundsOnClick: true }).addTo(u);
+
+      return function (data) {
+        markerLayer.clearLayers(); // 每次绘制前清空旧的浮标
+
+        data.forEach(([s, id]) => {
+          let xy, cityName = s.split(' ')[0];
+
+          if (xy = CHINA_CITIES_DB[cityName]) {
+            const marker = L.marker(xy, {
+              icon: L.divIcon({
+                className: 'pnt',
+                html: [...id].at(-1)
+              })
+            })
+              .bindPopup(s)
+              .on('click', () => onMarkerClick(+id));
+            markerLayer.addLayer(marker);
+          } else {
+            console.warn(`未在数据库中找到城市: ${cityName}`);
+          }
+        });
+      };
+    }
+    let mapHov = (u, onCity, onHeat, { bgTap = '#FF9800', bgHov = 'cadetblue' } = {}) => {
+      let mo = { fillOpacity: 0.0, weight: cMap.kBnd, color: bgHov }
+      // 添加瓦片图层
+      fetch('./100000_full.json')
+        .then(res => res.json())
+        .then(data => {
+          window.gis = L.geoJson(data, {
+            style: mo,
+            onEachFeature
+          }).addTo(u);
+          gis.json = data
+
+          L.TileLayer.boundaryCanvas('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">感谢OSM开源</a>',
+            boundary: cMap.crop ? gis.json : null,
+          }).addTo(u);
+
+        });
+
+      // 简单的悬停、点击
+      let g0, onEachFeature = (feature, layer, 省) => {
+        省 = feature.properties.name.replace(/[省市]$/, '')
+        layer.on({
+          mouseover: (e) => {
+            e.target.setStyle({ fillOpacity: 0.3, });
+          },
+          mouseout: (e, u) => {
+            u = e.target
+            if (g0 != u) u.setStyle({ fillOpacity: 0 })
+            onHeat(省, u)
+          },
+          click(e) {
+            L.DomEvent.stopPropagation(e);
+            if (g0) { g0.setStyle(mo); g0.fire('mouseout') }
+            g0 = e.target; g0.setStyle({
+              fillOpacity: 0.6,
+              color: bgTap // 高亮边框颜色
+            });
+            onCity(省);
+          }
+        });
+
+        onHeat(省, layer)
+      }
+
+      onCity('')
+      u.on({ click() { g0?.setStyle(mo); onCity(''); g0 = null } })
+    }
+
+    MapRect.UI = (u, upd, g = new GUI({ title: '地图显示设置', container: map })) => {
+      g.add(u, 'crop').name('⚠️调参后-点我两下').onChange(upd);
+
+      g.add(u, 'p_line').name('折线图展示-重选省份');
+
+      g.add(u, 'emo').name('浮标表情包');
+
+      g.add(u, 'kHeat', 0, 2, 1).name('省份着色加权');
+
+      g.add(u, 'modeHot', {
+        '点击数': 'views',
+        '热议度': 'heat',
+        '发帖数': 'posts'
+      }).name('省和事件热度指标');
+
+      g.add(u, 'kPos', 0, 1, .01).name('数据截断%');
+
+      g.add(u, 'kBnd', 0, 2, .5).name('厚重描边');
+
+      g.add(u, 'lWord', 3, 10, 1).name('词云词密度-重拖窗口').onChange(() => wc.resize());
+
+      g.addFolder("提示：顶栏的按钮皆可点击 💎")
+      g.addFolder("ABCD表示[春夏秋冬]4个季度，比如：").open(0)
+      g.addFolder("D001=10.1, D230=12.30 📈旧文按月索引(2词云/月)")
+      g.hide()
+      icSetup.onclick = () => g._hidden ? (g.show(), g.domElement.style.cssText = `position: absolute; bottom: 0;  right: 0;`) : confetti.ukraine(5, ['#ee0000', '#66ccff'])
+
+    }
+
+    MapRect.DateUI = ({ A, B, onchange }) => {
+      const f = d => d.toISOString().split('T')[0]; // Date转YYYY-MM-DD
+      const s = {
+        A: f(A), B: f(B),
+        w: new Date(f(A)).getUTCDay() || 7,
+        d: Math.round((B - A) / 864e5),
+        n: getISOWeek(f(A)), back: ''
+      };
+
+      let gui = new GUI({ title: '时光机', container: map.parentNode }), g1;
+      const up = () => gui.controllers.forEach(c => c.updateDisplay());
+      const edit = () => onchange({ A: new Date(s.A), B: new Date(s.B), nthWeek: s.n });
+
+      // 2. 变为可调滑条 (从周 1-7, 天数 1-7)
+      gui.add(s, 'w', 1, 7, 1).name('从上周几').onChange(v => {
+        const d = new Date(s.A); d.setUTCDate(d.getUTCDate() + v - (d.getUTCDay() || 7));
+        s.A = f(d); const b = new Date(d.getTime() + s.d * 864e5); s.B = f(b);
+        s.n = getISOWeek(s.A); up(); edit();
+      });
+
+      gui.add(s, 'd', 1, 7, 1).name('天数').onChange(v => {
+        s.B = f(new Date(new Date(s.A).getTime() + v * 864e5)); up(); edit();
+      });
+      g1 = gui.addFolder("详细日期").open(0)
+      // 3. 代替 resolution 的 nthWeek 联动滑条 (1-53周)
+      g1.add(s, 'n', 1, 53, 1).name('第几周').onChange(v => {
+        const diff = v - getISOWeek(s.A);
+        const d = new Date(s.A), b = new Date(s.B);
+        d.setUTCDate(d.getUTCDate() + diff * 7); b.setUTCDate(b.getUTCDate() + diff * 7);
+        s.A = f(d); s.B = f(b); up(); edit();
+      });
+
+      // 1. 日期输入框 (保持 HTML5 原生 date 样式)
+      g1.add(s, 'A').onChange(v => {
+        s.w = new Date(v).getUTCDay() || 7;
+        s.d = Math.round((new Date(s.B) - new Date(v)) / 864e5);
+        s.n = getISOWeek(v); up(); edit();
+      }).domElement.querySelector('input').type = 'date';
+
+      g1.add(s, 'B').onChange(v => {
+        s.d = Math.round((new Date(v) - new Date(s.A)) / 864e5); up(); edit();
+      }).domElement.querySelector('input').type = 'date';
+      gui.add(s, 'back', ['1h', '12h', '3d']).name('快速时段')
+      edit(); // 初始化触发一次
+      gui.domElement.style.cssText = `position: absolute;top: 0;opacity: .7;`
+      return gui;
+    }
+
   </script>
-  <svg id=cssSvg>
+  <svg id=css_paint>
     <defs>
       <filter id="hue-grep0" color-interpolation-filters="sRGB">
         <feFlood style="flood-color: var(--bg-bad, #000);" result="targetColor" />
@@ -583,26 +830,7 @@
 
 
 
-      },
-      mapDragRect = u => u.on('boxzoomend', function (e) {
-        // e.boxZoomBounds 就是你用 Shift 键拉出来的矩形范围
-        const containerBounds = e.boxZoomBounds;
-
-        // 遍历 GeoJSON 图层中的每一个要素
-        gis.eachLayer(function (layer) {
-          // 如果是点要素（Marker / CircleMarker）
-          if (layer.getLatLng && containerBounds.contains(layer.getLatLng())) {
-            // 该要素在框选范围内，改变其样式或将其加入选中列表
-            layer.setStyle({ color: 'red' });
-          }
-
-          // 如果是线或面要素（Polyline / Polygon）
-          else if (layer.getBounds && containerBounds.intersects(layer.getBounds())) {
-            // 判断其边界是否与框选范围相交
-            layer.setStyle({ color: 'red' });
-          }
-        });
-      });
+      };
 
     let ti = s => ({ text: s, left: 'center', textStyle: { color: '#333333', fontSize: 30, rich: { b: { backgroundColor: '#66ccff', borderRadius: 4, padding: [2, 8, 4, 8], } } } }),
       segmenter = new Intl.Segmenter('zh', { granularity: 'word' }),
@@ -650,9 +878,12 @@
           const label = '周' + (dayNum === 0 ? '日' : ['一', '二', '三', '四', '五', '六'][dayNum - 1]);
           return [label, wm[dayNum] ?? 0];
         }),
-          lin = {
+          lin = cMap.p_line ? {
             type: 'line', smooth: true, symbol: 'circle', symbolSize: 12,
-          }
+          } : [
+            { type: 'bar', barWidth: 4, colorBy: 'data' }, // 茎
+            { type: 'scatter', symbolSize: 16, colorBy: 'data', label: { show: true, position: 'top' } } // 叶（带数字）
+          ]
 
         liner.setOption({
           title: ti('按周贴文数量'),
@@ -663,10 +894,7 @@
           },
           xAxis: { type: 'category' },
           yAxis: { type: 'value' },
-          series: lin ?? [
-            { type: 'bar', barWidth: 4, colorBy: 'data' }, // 茎
-            { type: 'scatter', symbolSize: 16, colorBy: 'data', label: { show: true, position: 'top' } } // 叶（带数字）
-          ]
+          series: lin
         }, true)
       }
 
@@ -683,135 +911,27 @@
       const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 
       return `${date.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-    };
+    },
 
-    /**
-     * 创建一个仅限于中国区域的二维地图实例
-     * @param {string} el - 地图容器的DOM元素ID
-     * @param {function} onMarkerClick - 浮标点击事件的回调函数
-     * @returns {function} - 返回一个接收数据并绘制浮标的函数
-     */
-    function MapRect(el, onMarkerClick, onCity, onHeat) {
-      // 步骤2: 定义中国的地理边界
-      const chinaBounds = L.latLngBounds(
-        L.latLng(10, 64), // 西南角
-        L.latLng(54, 145) // 东北角
-      );
+    mapDragRect = u => u.on('boxzoomend', function (e) {
+        // e.boxZoomBounds 就是你用 Shift 键拉出来的矩形范围
+        const containerBounds = e.boxZoomBounds;
 
-      // 步骤3: 初始化地图，并应用限制
-      const u = L.map(el, {
-        center: [36, 109],      // 地图中心点设为中国
-        zoom: 5,                // 初始缩放级别
-        minZoom: 4, maxZoom: 6,             // 最小缩放级别，防止过度缩小
-        maxBounds: chinaBounds, // 设置地图拖拽边界
-        maxBoundsViscosity: 1.0, // 设置边界为“硬”边界，无法拖出
-        attributionControl: false
-      });
-      L.control.attribution({ prefix: L.Control.Attribution.prototype.options.prefix.replace('Leaflet', '') }).addTo(u);
+        // 遍历 GeoJSON 图层中的每一个要素
+        gis.eachLayer(function (layer) {
+          // 如果是点要素（Marker / CircleMarker）
+          if (layer.getLatLng && containerBounds.contains(layer.getLatLng())) {
+            // 该要素在框选范围内，改变其样式或将其加入选中列表
+            layer.setStyle({ color: 'red' });
+          }
 
-      mapHov(u, onCity, onHeat)
-      mapDragRect(u)
-
-      icTalk.onclick = ({ target: e }) => {
-        '?' || L.popup()
-          .setLatLng(u.containerPointToLatLng([e.offsetLeft + 50, e.offsetTop]))
-          .setContent('hi')
-          .openOn(u)
-
-        {
-          let A = (min, max) => Math.random() * (max - min) + min;
-
-          confetti({
-            angle: 55,
-            spread: A(50, 70),
-            particleCount: A(50, 100),
-            origin: { y: 0.8, x: 0 },
-            scalar: 2,
-            shapes: ['star'].concat([...Object.values(emo), ..."🌈🌹🌏"].map(s => confetti.shapeFromText({ text: s, scalar: 2 })))
-          });
-        }
-      }
-      u.attributionControl._container.onclick = () => confetti.ukraine()
-
-      const markerLayer = L.layerGroup().addTo(u);
-
-      // 返回核心的绘图函数
-      return function (data) {
-        markerLayer.clearLayers(); // 每次绘制前清空旧的浮标
-
-        data.forEach(([locationStr, id]) => {
-          const cityName = locationStr.split(' ')[0];
-          // 从“外部库”加载的 CHINA_CITIES_DB 中查找坐标
-          const coords = CHINA_CITIES_DB[cityName];
-
-          if (coords) {
-            const marker = L.marker(coords, {
-              icon: L.divIcon({
-                className: 'pnt',
-                html: [...id].at(-1)
-              })
-            })
-              .bindPopup(locationStr)
-              .on('click', () => onMarkerClick(id));
-            markerLayer.addLayer(marker);
-          } else {
-            console.warn(`未在数据库中找到城市: ${cityName}`);
+          // 如果是线或面要素（Polyline / Polygon）
+          else if (layer.getBounds && containerBounds.intersects(layer.getBounds())) {
+            // 判断其边界是否与框选范围相交
+            layer.setStyle({ color: 'red' });
           }
         });
-      };
-    }
-
-    let mo = { fillOpacity: 0.0, weight: 1, color: 'cadetblue' }, mapHov = (u, tap, f) => {
-
-      // 加载并添加图层
-      fetch('./100000_full.json')
-        .then(res => res.json())
-        .then(data => {
-          window.gis = L.geoJson(data, {
-            style: mo,
-            onEachFeature
-          }).addTo(u);
-          gis.json = data
-
-          // 添加瓦片图层
-          L.TileLayer.boundaryCanvas(0 ? 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png' : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">感谢OSM开源</a>',
-            boundary: gis.json,
-          }).addTo(u);
-
-        });
-
-      // 简单的悬停逻辑（复用之前的写法）
-      let g0, onEachFeature = (feature, layer, 省) => {
-        省 = feature.properties.name.replace(/[省市]$/, '')
-        layer.on({
-          mouseover: (e) => {
-            e.target.setStyle({ fillOpacity: 0.3, weight: 2 });
-            // 可以在此处显示城市名
-          },
-          mouseout: (e, u) => {
-            u = e.target
-            if (g0 != u) u.setStyle({ fillOpacity: 0 })
-            f(省, u)
-          },
-          click(e) {
-            L.DomEvent.stopPropagation(e);
-            if (g0) { g0.setStyle(mo); g0.fire('mouseout') }
-            g0 = e.target; g0.setStyle({
-              fillOpacity: 0.6,
-              weight: 3,
-              color: '#ff4500' // 高亮边框颜色
-            });
-            tap(省);
-          }
-        });
-
-        f(省, layer)
-      }
-      tap('')
-      u.on({ click() { g0?.setStyle(mo); tap(''); g0 = null } })
-
-    }
+      })
     window.globe = () => {
       const P = { parser: { type: 'json', x: 'lng', y: 'lat' } }, cities = [
         { lng: 116.4, lat: 39.9, v: '🙏' }, { lng: 121.5, lat: 31.2, n: '🍔', v: '✍️' },
