@@ -6,6 +6,7 @@
   <title>WHYO | 中国维权时局图</title>
   <meta name="description" content="《雪花周报》是 X.com 中文大V李老师推文按照省份、城市、话题数据的可视化，归档了历年爆料的文本和时间趋势。">
   <link rel="icon" href="favicon.png" sizes="256x256">
+  <base target="_blank">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -19,6 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2/dist/echarts-wordcloud.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/2.3.1/list.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
 
   <link type="text/css" rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/dist/css/goldenlayout-base.css" />
@@ -32,6 +34,10 @@
     body {
       margin: 0;
       padding: 0;
+    }
+
+    nav * {
+      font-size: 16px;
     }
 
     @media (orientation: portrait) {
@@ -59,10 +65,6 @@
 
     #map {
       height: 100vh;
-    }
-
-    :has(~ .lil-gui) .leaflet-control-zoom {
-      opacity: 0;
     }
 
     filter#hue-grep1 {
@@ -226,7 +228,7 @@
       color: #333;
     }
 
-    .desc {
+    .txt {
       font-size: 24px;
       line-height: 1.6;
       color: #aaa;
@@ -249,7 +251,7 @@
       dark.onchange = () => { if (dark.value != 'globe') { map.setAttribute('dark', dark.value) } else { map.innerHTML = ''; globe(); map.setAttribute('dark', 'darker') } }
       tbl.onclick = () => togMap()
       num.onclick = () => togMap(0b1)
-      srch.onchange = () => seeAll(p.filter(u => u.desc.includes(srch.value)))
+      srch.onchange = () => seeAll(p.filter(u => u.txt.includes(srch.value)))
 
       let viz = document.querySelectorAll('.b-box'),
         obs = new ResizeObserver(es => es.forEach(e => {
@@ -263,7 +265,7 @@
 
       window.cMap = { crop: true, p_line: true, emo: '🌈🌹🌏', kHeat: 2, kPos: 1, kBnd: 1.5, lWord: 4, modeHot: 'views' }
 
-      let map1, onMap = (city, g) => {
+      let map1, tPag = MapRect.DateUI({}), inAB = _ => 1, onMap = (city, g) => {
         readTwit(p = [], csvs[0])
         if (map1) {
           g = map.lastChild
@@ -272,18 +274,25 @@
 
         city =
           _.chain(p)
-            .groupBy(item => item.loc.split(' ')[1]) // 按省份分组
+            .groupBy(item => item.city.split(' ')[1]) // 按省份分组
             .mapValues(items => _.sumBy(items, 'heat')).value();
 
+        tPag.onchange = (A, B) => {
+          console.log(tPag)
+          cityData(p, map1)
+          inAB = u => (A < u.dt && u.dt < B)
+          seeAll('')
+        }
 
-        map1 = MapRect('map', id => {
-        }, seeAll = k => {
-          let a = k.substr ? p.filter(u => u.loc.includes(k)) : k
+        map1 = MapRect('map', (id,city) => `
+      我在${city}，<a href=//x.com/i/status/${id}>看见了这个</a>
+        `, seeAll = k => {
+          let a = k.substr ? p.filter(u => inAB(u) && u.city.includes(k)) : k
           num.innerText = a.length
           seeCmt(a)
           seeTop(a)
           seeWeek(a)
-          seeWd(a.map(u => u.desc).join(''), k.substr ? k : `手气不错`)
+          seeWd(a.map(u => u.txt).join(''), k.substr ? k : `手气不错`)
         }, (k, v, n) => {
           if (!(n = city[k])) { return }
           let kh = cMap.kHeat, k1 = _.max(Object.values(city))
@@ -297,7 +306,7 @@
 
       onMap()
       MapRect.UI(cMap, onMap)
-      MapRect.DateUI({ A: With(new Date, d => d.setDate(d.getDate() - 6)), B: new Date, onchange: console.log })
+
       // 2. 调用map函数，绘制数据
       map1([
         ['南京 江苏', 'id-nanjing'],
@@ -305,7 +314,10 @@
         ['乌鲁木齐 新疆', 'id-urumqi']
       ]);
 
-      cityData(p, map1)
+      MapRect.logSeq().then(a => {
+        p = a; p.filter = f => With([], a => { for (let N = p.length, i = 0, u; i < N; i++) if (f(u = p[i], i)) a.push(u) })
+        p.slice = (A, B) => (B = B < 0 ? p.length + B : B, p.filter((_, i) => A <= i && i <= B))
+      })
 
     })</script>
 
@@ -320,7 +332,7 @@
       '香港': [22.31, 114.17], '澳门': [22.19, 113.54], '大理': [25.61, 100.27], '乌鲁木齐': [43.82, 87.61]
     };
 
-    navigator.serviceWorker?.register?.('./sw.js') 
+    navigator.serviceWorker?.register?.('./sw.js')
     let With = (u, f) => (f(u), u),
       tog = (cs) => e => (cs.split(' ').map(s => e.classList.toggle(s)), this.seeAll?.(p.slice(0, p.length * Math.random()))),
       only1 = (e0, op, i = 0, cs = e0.children) => (e0.onclick = ev => { if (!i.nodeType) { op(i = cs[i]); return } op(i); op(i = ev.target) })(),
@@ -381,8 +393,7 @@
         <span class="text-white font-black tracking-widest text-sm"
           style="font-family: 'Courier New', Courier, monospace;">WHYO WEEKLY</span>
         <span class="text-gray-500 text-[10px]">v2.1</span>
-        <span class="text-gray-500 text-[10px]">@WhyYou<u><a target=_blank
-              href=https://x.com/whyyoutouzhele/media>touzhele</a></u></span>
+        <span class="text-gray-500 text-[10px]">@WhyYou<u><a href=https://x.com/whyyoutouzhele/media>touzhele</a></u></span>
         <span id=icSetup
           class="bg-[#e11d48] text-white font-extrabold px-1.5 py-0.5 rounded text-[10px] tracking-tight border border-[#fb7185] shadow-[0_0_10px_rgba(225,29,72,0.4)]">
           2026A103 🧰 ⚙️
@@ -557,10 +568,10 @@
 
     /**
  * 创建一个仅限于中国区域的二维地图实例
- * @param {function} onMarkerClick - 浮标点击事件的回调函数
+ * @param {function} onMarkerHTML - 浮标点击事件的UI
  * @returns {function} - 绘制浮标[k:v,]的函数
  */
-    window.MapRect = (el, onMarkerClick, ..._3) => {
+    window.MapRect = (el, onMarkerHTML, ..._3) => {
       // 步骤2: 定义中国的地理边界
       const chinaBounds = L.latLngBounds(
         L.latLng(10, 64), // 西南角
@@ -571,10 +582,11 @@
       const u = L.map(el, {
         center: [36, 109],      // 地图中心点设为中国
         zoom: 5,                // 初始缩放级别
-        minZoom: 4, maxZoom: 6,             // 最小缩放级别，防止过度缩小
+        minZoom: 4, maxZoom: 7,             // 最小缩放级别，防止过度缩小
         maxBounds: chinaBounds, // 设置地图拖拽边界
         maxBoundsViscosity: 1.0, // 设置边界为“硬”边界，无法拖出
-        attributionControl: false
+        attributionControl: false,
+        zoomControl: false
       });
       L.control.attribution({ prefix: L.Control.Attribution.prototype.options.prefix.replace('Leaflet', '') }).addTo(u);
 
@@ -618,8 +630,8 @@
                 html: [...id].at(-1)
               })
             })
-              .bindPopup(s)
-              .on('click', () => onMarkerClick(+id));
+              .bindPopup(onMarkerHTML(parseInt(id),s))
+              // .on('click', () => );
             markerLayer.addLayer(marker);
           } else {
             console.warn(`未在数据库中找到城市: ${cityName}`);
@@ -699,59 +711,79 @@
 
       g.addFolder("提示：顶栏的按钮皆可点击 💎")
       g.addFolder("ABCD表示[春夏秋冬]4个季度，比如：").open(0)
-      g.addFolder("D001=10.1, D230=12.30 📈旧文按月索引(2词云/月)")
+      g.addFolder("D030=10.30, D230=12.30 📈旧文按月索引(2词云/月)")
       g.hide()
       icSetup.onclick = () => g._hidden ? (g.show(), g.domElement.style.cssText = `position: absolute; bottom: 0;  right: 0;`) : confetti.ukraine(5, ['#ee0000', '#66ccff'])
 
     }
 
-    MapRect.DateUI = ({ A, B, onchange }) => {
-      const f = d => d.toISOString().split('T')[0]; // Date转YYYY-MM-DD
-      const s = {
-        A: f(A), B: f(B),
-        w: new Date(f(A)).getUTCDay() || 7,
-        d: Math.round((B - A) / 864e5),
-        n: getISOWeek(f(A)), back: ''
+    MapRect.DateUI = ({ A = Date.now() - 6 * 864e5, B = Date.now() }) => {
+      const gui = new GUI({ title: 'WHYO Times 雪花时光机', container: map.parentNode });
+      gui.domElement.style.cssText = `position: absolute;top: 0;opacity: .7;`
+
+      // 格式化为 YYYY-MM-DD，原生 type="date" 强依赖此格式
+      let w0 = -0, fmt = d => new Date(d).toISOString().split('T')[0], ts = d => dayjs(d).valueOf();
+
+      const state = {
+        wDay: 6, days: 6, week: w0 = getISOWeek(fmt(A)),
+        A: fmt(A),
+        B: fmt(B)
+      },
+        update = () => {
+          gui.controllersRecursive().forEach(c => c.updateDisplay());
+          state.onchange(A, B);
+        },
+        upsel = () => {
+          A = ts(state.A)
+          B = ts(state.B); update()
+        }
+
+      const ranger = () => {
+        const start = Date.now() - (7 - state.wDay + new Date().getDay()) * 86400000;
+        state.A = fmt(start);
+        state.B = fmt(start + state.days * 86400000);
+        update();
       };
 
-      let gui = new GUI({ title: '时光机', container: map.parentNode }), g1;
-      const up = () => gui.controllers.forEach(c => c.updateDisplay());
-      const edit = () => onchange({ A: new Date(s.A), B: new Date(s.B), nthWeek: s.n });
+      gui.addFolder('范围拖选').add(state, 'wDay', 1, 7, 1).name('从上周几').onChange(ranger);
+      gui.folders[0].add(state, 'days', 1, 30, 1).name('含天数').onChange(ranger);
 
-      // 2. 变为可调滑条 (从周 1-7, 天数 1-7)
-      gui.add(s, 'w', 1, 7, 1).name('从上周几').onChange(v => {
-        const d = new Date(s.A); d.setUTCDate(d.getUTCDate() + v - (d.getUTCDay() || 7));
-        s.A = f(d); const b = new Date(d.getTime() + s.d * 864e5); s.B = f(b);
-        s.n = getISOWeek(s.A); up(); edit();
+      const g1 = gui.addFolder('详细日期').open(0);
+
+      g1.add(state, 'week', 1, 53, 1).name('第几周').onChange(v => {
+        state.A = fmt(A = A + (v - w0) * 7 * 864e5);
+        w0 = v; update()
       });
+      g1.addFolder(`A101~D230为全年（1月1到12.30）`).open(0)
 
-      gui.add(s, 'd', 1, 7, 1).name('天数').onChange(v => {
-        s.B = f(new Date(new Date(s.A).getTime() + v * 864e5)); up(); edit();
-      });
-      g1 = gui.addFolder("详细日期").open(0)
-      // 3. 代替 resolution 的 nthWeek 联动滑条 (1-53周)
-      g1.add(s, 'n', 1, 53, 1).name('第几周').onChange(v => {
-        const diff = v - getISOWeek(s.A);
-        const d = new Date(s.A), b = new Date(s.B);
-        d.setUTCDate(d.getUTCDate() + diff * 7); b.setUTCDate(b.getUTCDate() + diff * 7);
-        s.A = f(d); s.B = f(b); up(); edit();
-      });
+      // 核心 Hack：强转 date 类型
+      const ctrlA = g1.add(state, 'A').onChange(upsel);
+      const ctrlB = g1.add(state, 'B').onChange(upsel);
+      ctrlA.domElement.querySelector('input').type = 'date';
+      ctrlB.domElement.querySelector('input').type = 'date';
 
-      // 1. 日期输入框 (保持 HTML5 原生 date 样式)
-      g1.add(s, 'A').onChange(v => {
-        s.w = new Date(v).getUTCDay() || 7;
-        s.d = Math.round((new Date(s.B) - new Date(v)) / 864e5);
-        s.n = getISOWeek(v); up(); edit();
-      }).domElement.querySelector('input').type = 'date';
+      // 横向 Badge 注入
+      const offsets = { '1h': 36e5, '12h': 12 * 36e5, '3d': 3 * 864e5 };
+      const badges = document.createElement('div');
+      gui.domElement.append(badges);
+      badges.style.cssText = 'display:flex; gap:5px; padding:8px; background:#222;';
+      badges.innerHTML = ['NOW', '1h', '12h', '3d'].map((t, i) => `<button style="background:${'blueviolet none green #000'.split(' ')[i]}">${t}</button>`).join('');
 
-      g1.add(s, 'B').onChange(v => {
-        s.d = Math.round((new Date(v) - new Date(s.A)) / 864e5); up(); edit();
-      }).domElement.querySelector('input').type = 'date';
-      gui.add(s, 'back', ['1h', '12h', '3d']).name('快速时段')
-      edit(); // 初始化触发一次
-      gui.domElement.style.cssText = `position: absolute;top: 0;opacity: .7;`
-      return gui;
-    }
+      badges.onclick = (e) => {
+        if (e.target.tagName !== 'BUTTON') return;
+        const type = e.target.innerText;
+
+        if (type === 'NOW') {
+          state.A = state.B = fmt(A = B = Date.now());
+          w0 = getISOWeek(fmt(A))
+        } else {
+          state.A = fmt(A = A - offsets[type]);
+        }
+        update();
+      };
+
+      return state;
+    };
 
   </script>
   <svg id=css_paint>
@@ -775,58 +807,82 @@
     </defs>
   </svg>
 
+  <script type="importmap">
+    {
+      "imports": {
+        "flatbuffers": "https://cdn.jsdelivr.net/npm/flatbuffers@25.2.10/mjs/flatbuffers.js"
+      }
+    }
+  </script>
+  <script type="module">
+    import { ByteBuffer } from 'flatbuffers';
+    import { ViewList } from './xcom.js';
+
+    MapRect.logSeq = async (uBin = './xcom/a.bin', T = ViewList, idx = 'dt', BAD_GUYS = ['constructor', '__init', 'mutate_', 'bb', 'bb_pos']) => {
+      let res = await (await fetch(uBin)).arrayBuffer(),
+        buf = new ByteBuffer(new Uint8Array(res)),
+        root = T.getRootAsViewList(buf),
+        ks//=['']
+
+      return new Proxy(root, {
+        get: (t, p) => t[p] ?? (p === 'length' ? root.listLength() : (t[p] = (typeof p === 'symbol' || isNaN(p)) ? t[p] : new Proxy(
+          With(t.list(Number(p)), u => ks ??= [idx].concat(Object.getOwnPropertyNames(u.__proto__).filter(k => !BAD_GUYS.includes(k)))), {
+          get: (o, k) => {
+            if (k === idx) return Number(root.dts(p));
+            let val = typeof o[k] === 'function' ? o[k]() : o[k];
+            return (k === 'dt1' && val !== null) ? Number(val) : val;
+          },
+          ownKeys: () => ks,
+          getOwnPropertyDescriptor: (o, k) =>
+            ks.includes(k) ? { enumerable: true, configurable: true, value: o[k] } : undefined
+        })))
+      });
+    }
+  </script>
   <script>
     let emo = { 维权: '✊', 求助: '🙏', 建议: '✍️', 投诉: '😾' }
 
-    let seeCmt = (data) => {
+    let seeCmt = (data, X_COM = `https://x.com/i/status/`) => {
       let e = document.querySelector('.list')
       e.innerHTML = data.map(x => `
     <li class="item">
       <div class="meta">
-        <span class="loc">${x.loc}</span>
-        <a href="${x.url}">${x.dt}</a>
+        <span class="loc">${x.city}</span>
+        <a href="${x.url ?? X_COM + x.id}">${dayjs(x.dt).format('YYYY-MM-DD')}</a>
         <span> <b class="heat">-${x.heat}°C</b></span>
-        <span class="type"  style="background:${x.bg ?? '#fef2f2'}">${x.type}</span>
+        <span class="type"  style="background:${/上访/.test(x.tag) ? 'red' : '#fef2f2'}">${x.tag}</span>
       </div>
-      <div class="desc">${x.desc}</div>
+      <div class="txt">${x.txt}</div>
     </li>
   `).join('')
 
       // 初始化 List.js: 绑定 class 名即可实现 Table 功能
       cTbl = new List('tbl', {
-        valueNames: ['loc', 'type', 'heat', 'bg', 'desc']
+        valueNames: ['loc', 'tag', 'heat', 'bg', 'txt']
       })
     },
       readTwit = (p, csv) => csv.trim().split('\n').forEach(r => {
         let m = r.split(',')
         if (!m) return
 
-        let [loc, t, h, dt, url, d] = m,
-          [c, n] = loc.trim().split(/\s+/),
+        let [city, t, h, dt, url, d] = m,
+          [c, n] = city.trim().split(/\s+/),
           v = +h
 
         // 基础实体: 直接灌入 List.js 或 UI 模板
-        if (t) p.push({ loc, dt, type: t, heat: v, url, desc: d })
+        if (t) p.push({ city, dt: dayjs(dt).valueOf(), tag: t, heat: v, url, txt: d })
       }),
 
       cityData = (rawData, add, i = 0) => {
 
         const a = _.chain(rawData)
-          .groupBy(item => item.loc.split(' ')[0]) // 按城市分组
-          .mapValues(items => {
-            // 在城市组内，按热度降序排列
-            const sortedItems = _.orderBy(items, ['heat'], ['desc']);
-            // 映射出需要的字段，并生成 nth (从 1 开始的排名)
-            return _.map(sortedItems, (item) => ({
-              type: item.type,
-              heat: item.heat,
-              nth: i++,
-              desc: item.desc
-            }));
-          })
+          .groupBy(item => item.city.split(' ')[0]) // 按城市分组
+          .mapValues(items =>
+            _.orderBy(items, ['heat'], ['txt'])
+          )
           .toPairs().value();
 
-        add(a.flatMap(([k, a]) => a.map(x => [k, `${x.nth}${emo[x.type] ?? '👍'}`])))
+        add(a.flatMap(([k, a]) => a.map(x => [k, `${x.id}${emo[x.tag] ?? '👍'}`])))
 
 
 
@@ -855,16 +911,16 @@
       },
 
       seeTop = a => {
-        let bd = _.countBy(a, item => item.type)
+        let bd = _.countBy(a, item => item.tag)
         tops.setOption({
           title: ti('😼 高频事件榜'),
           tooltip: { trigger: 'axis' },
           grid: { left: '15%', right: '10%', bottom: '15%', top: '20%' },
           xAxis: { type: 'value', splitLine: { lineStyle: { color: '#eee' } } },
-          yAxis: { type: 'category', data: Object.keys(bd).map(k => (emo[k] ?? '') + k) },
+          yAxis: { type: 'category', data: Object.keys(bd).map(k => (emo[k] ?? '') + k), axisLabel: { textStyle: { fontSize: 18, color: 'green' } } },
           series: [{ type: 'bar', data: Object.values(bd), itemStyle: { color: '#9b63f8' } }]
         }, true)
-        let data = a.map(({ type: k, heat: v }) => ({ name: k, value: v }))
+        let data = a.map(({ tag: k, heat: v }) => ({ name: k, value: v }))
         pie.setOption({
           title: { text: `按热度统计` },
           tooltip: { trigger: 'item' },
@@ -908,12 +964,10 @@
       date.setDate(date.getDate() + 4 - (date.getDay() || 7));
 
       const yearStart = new Date(date.getFullYear(), 0, 1);
-      const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-
-      return `${date.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+      return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
     },
 
-    mapDragRect = u => u.on('boxzoomend', function (e) {
+      mapDragRect = u => u.on('boxzoomend', function (e) {
         // e.boxZoomBounds 就是你用 Shift 键拉出来的矩形范围
         const containerBounds = e.boxZoomBounds;
 

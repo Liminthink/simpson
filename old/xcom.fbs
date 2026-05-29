@@ -1,0 +1,18 @@
+// flatc --gen-onefile --gen-object-api --python --ts ./old/xcom.fbs; tsc xcom/*.ts --target es6 --module esnext --noCheck
+namespace xcom;
+
+table ViewItem {
+  views:int;
+  heat:float;
+  dt1:long = null; // 放回原处，声明为可空
+  id:long;
+  city:string;
+  tag:string;
+  txt:string;
+}
+
+table ViewList { 
+  dts:[long];      // dt 作为独立数组列 (严格的 64 位整型)
+  list:[ViewItem]; 
+}
+root_type ViewList;
