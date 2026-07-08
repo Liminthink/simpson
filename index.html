@@ -1080,32 +1080,73 @@
           }
         });
       })
-    window.globe = () => {
-      const P = { parser: { type: 'json', x: 'lng', y: 'lat' } }, cities = [
-        { lng: 116.4, lat: 39.9, v: '🙏' }, { lng: 121.5, lat: 31.2, n: '🍔', v: '✍️' },
-      ]
-      window.scene = new L7.Scene({
-        id: 'map',
-        map: new L7.GaodeMap({ style: 'dark', features: ['bg', 'point'], center: [108, 35], zoom: 4, pitch: 20, token: '高德Key' })
-      });
-      scene.on('loaded', () => {
+     window.globe = () => {
+  const P = { parser: { type: 'json', x: 'lng', y: 'lat' } };
+  const cities = [
+    { lng: 116.4, lat: 39.9, v: '🙏', name: '北京' }, 
+    { lng: 121.5, lat: 31.2, n: '🍔', v: '✍️', name: '上海' },
+  ];
 
-        let emojis = Object.values(MapRect.emo) //['🚀', '🔥', '📍', '🐼','🍔'];
-        emojis.forEach(emoji => {
-          try { scene.addImage(`${emoji}`, rasterizeEmoji(emoji, 64)); } catch { }
-        });
+  // 1. 核心变化：将 GaodeMap 替换为 Earth，实现 3D 地球仪投影
+  window.scene = new L7.Scene({
+    id: 'map',
+    map: new L7.Earth({ 
+      zoom: 3, 
+      center: [108, 35]
+      // L7 内部自绘地球，无需高德 token 和 pitch 参数
+    })
+  });
 
-        scene.addLayer(new L7.PointLayer().source(cities, P).shape('v', v => v).size(24))
+  scene.on('loaded', () => {
+    let emojis = Object.values(MapRect.emo || ['🚀', '🔥', '📍', '🐼', '🍔']);
+    emojis.forEach(emoji => {
+      try { scene.addImage(`${emoji}`, rasterizeEmoji(emoji, 64)); } catch { }
+    });
 
-        scene.addLayer(new L7.LineLayer()
-          .source(gis.json)
-          .size(1)
-          .color('#336699') // 省界颜色
-          .style({
-            opacity: 0.6
-          }));
-      });
-    }
+    // ----------------------------------------------------
+    // 2. 交互层：用平面的 PolygonLayer 当作“点击热区”
+    // 就像地球仪上贴了一层透明塑料膜，只为了方便鼠标选中省份
+    // ----------------------------------------------------
+    const provinceLayer = new L7.PolygonLayer()
+      .source(gis.json)
+      .shape('fill') 
+      .color('rgba(0,0,0,0)') // 默认透明，看不见
+      .active({ color: 'rgba(51, 204, 255, 0.4)' }); // 鼠标悬浮时省份高亮
+
+    // 点击省份内部即可触发
+    provinceLayer.on('click', (e) => {
+      console.log('您选中了该省数据:', e.feature);
+    });
+
+    // ----------------------------------------------------
+    // 3. 视觉层：您原本的纯线框省界，覆盖在面上
+    // ----------------------------------------------------
+    const borderLayer = new L7.LineLayer()
+      .source(gis.json)
+      .size(1)
+      .color('#336699')
+      .style({ opacity: 0.6 });
+
+    // ----------------------------------------------------
+    // 4. 标签层：点图层点击弹窗
+    // ----------------------------------------------------
+    const labelLayer = new L7.PointLayer()
+      .source(cities, P)
+      .shape('v', v => v)
+      .size(24)
+      .active(true);
+
+    labelLayer.on('click', (e) => {
+      const data = e.feature;
+      alert(`您点击了标签: ${data.v}`);
+    });
+
+    // 依次加入图层（注意顺序，交互面在底，标签在顶）
+    scene.addLayer(provinceLayer); 
+    scene.addLayer(borderLayer);
+    scene.addLayer(labelLayer);
+  });
+};
 
     function rasterizeEmoji(emoji, size = 60) {
       const canvas = document.createElement('canvas');

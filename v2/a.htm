@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MapLibre GL JS 3D Globe Demo</title>
+    <!-- 引入 MapLibre GL JS v5 (Pre-release) 的 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.2.0/dist/maplibre-gl.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.2.0/dist/maplibre-gl.min.js"></script>
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-inspect@latest/dist/maplibre-gl-inspect.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-inspect@latest/dist/maplibre-gl-inspect.min.css"
+        rel="stylesheet" />
+
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        /* 让整个根视图的切换动画都变成贝塞尔曲线 */
+        ::view-transition-group(osm) {
+            animation-duration: 0.5s;
+            animation-timing-function: linear(0, 0.079 8.7%, 0.146 14.6%, 0.221 19.7%, 0.312 24.3%, 0.559 33.1%, 0.999 44.7%, 0.729 53.1%, 0.667 56.6%, 0.647 60%, 0.663 63%, 0.713 66.2%, 0.999 77.4%, 0.936 81.4%, 0.918 85%, 0.93 88.2%, 0.99 95.7%, 1);
+            /* 触发 GPU 分层，减少重绘（Repaint） */
+            will-change: opacity;
+            isolation: isolate;
+        }
+
+        #map {
+            view-transition-name: osm;
+            mask-image: linear-gradient(348deg, black, var(--t), #0000);
+            transition: .7s --t;
+        }
+        @property --t {
+            syntax: '<percentage>';
+            inherits: false;
+            initial-value: 10%;
+        }
+
+        .maplibregl-popup:has(.maplibregl-popup-content:empty) {
+            opacity: 0 !important;
+        }
+
+        .maplibregl-popup { transition: .2s opacity; }
+        @keyframes popup{to{translate: 0 3px}}
+        .maplibregl-popup-anchor-bottom { animation: .5s popup forwards }
+
+        .maplibregl-ctrl-inspect {
+            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20576%20512%22%3E%3C!--!Font%20Awesome%20Free%20v7.3.0%20by%20%40fontawesome%20-%20https%3A%2F%2Ffontawesome.com%20License%20-%20https%3A%2F%2Ffontawesome.com%2Flicense%2Ffree%20Copyright%202026%20Fonticons%2C%20Inc.--%3E%3Cpath%20d%3D%22M360.8%201.2c-17-4.9-34.7%205-39.6%2022l-128%20448c-4.9%2017%205%2034.7%2022%2039.6s34.7-5%2039.6-22l128-448c4.9-17-5-34.7-22-39.6zm64.6%20136.1c-12.5%2012.5-12.5%2032.8%200%2045.3l73.4%2073.4-73.4%2073.4c-12.5%2012.5-12.5%2032.8%200%2045.3s32.8%2012.5%2045.3%200l96-96c12.5-12.5%2012.5-32.8%200-45.3l-96-96c-12.5-12.5-32.8-12.5-45.3%200zm-274.7%200c-12.5-12.5-32.8-12.5-45.3%200l-96%2096c-12.5%2012.5-12.5%2032.8%200%2045.3l96%2096c12.5%2012.5%2032.8%2012.5%2045.3%200s12.5-32.8%200-45.3L77.3%20256%20150.6%20182.6c12.5-12.5%2012.5-32.8%200-45.3z%22%2F%3E%3C%2Fsvg%3E");
+            background-size: auto;
+        }
+
+        .maplibregl-ctrl-attrib-button {
+
+            background-image: url(data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20%20viewBox%3D%220%200%2012%208%22%3E%3Cpath%20fill%3D%22%234C7BE1%22%20d%3D%22M0%200h12v4H0z%22%3E%3C%2Fpath%3E%3Cpath%20fill%3D%22%23FFD500%22%20d%3D%22M0%204h12v3H0z%22%3E%3C%2Fpath%3E%3Cpath%20fill%3D%22%23E0BC00%22%20d%3D%22M0%207h12v1H0z%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E);
+            border-radius: 0;
+            background-repeat: repeat-x;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+
+
+
+    <script src="citi.js"></script>
+    <script src="citi-btns.mjs" type="module"></script>
+
+</body>
+
+</html>
