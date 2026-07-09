@@ -1,9 +1,16 @@
-const
+import maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.2.0/+esm';
+import jsyaml from 'https://esm.sh/js-yaml@4.1.0';
+import MaplibreInspect from 'https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-inspect@latest/+esm';
+
+
+export const
   With = (u, f) => (f(u), u)
-  , qs = s => document.querySelector(s)
   , useEntry = (u, k) => new Promise(ok => u.once(k, ok))
   , useMemoKV = (f, kv = new Map) => (k, v) => (v = kv.get(k), v ?? kv.set(k, v = f(k)), v)
   , useCount = (f, i = 0) => (...a) => f(i++, ...a)
+  , _404 = (genkey, u = {}) => new Proxy(u, { get: (u, k) => u[k] ?? (u[k] = genkey(k)) })
+  , FnHoles = () => _404((k, v) => (vf) => (v == null) ? (v = vf) : v(vf))
+
   , useSwap = (c, onexit = c => { }, LS = localStorage) => {
     let pre = c.key ?? 'c.'; delete c.key
     let ks = Object.keys(c), k, v
@@ -11,27 +18,38 @@ const
     addEventListener("unload", () => { onexit(c); for (k of ks) LS[pre + k] = JSON.stringify(c[k]) })
     return c
   }
-
-CSS.fx = document.startViewTransition?.bind?.(document) ?? (f => f())
-
-let
-  _404 = (genkey, u = {}) => new Proxy(u, { get: (u, k) => u[k] ?? (u[k] = genkey(k)) })
-  , FnHoles = () => _404((k, v) => (vf) => (v == null) ? (v = vf) : v(vf))
+  , useChanged = (find = () => true, opt = [document, { attributes: true, childList: true, subtree: true }]) => new Promise(OK => new MutationObserver((_, obs, e) => { e = find(); obs.takeRecords(); e && (obs.disconnect(), OK(e)) }).observe(...opt))
 
   , useOldValue = (on0, v) => (v1) => { if (v1 != null && v != v1) { v && on0(v, v1); v = v1 } return v1 }
-  , useChanged = (find = () => true, opt = [document, { attributes: true, childList: true, subtree: true }]) => new Promise(OK => new MutationObserver((_, obs, e) => { e = find(); obs.takeRecords(); e && (obs.disconnect(), OK(e)) }).observe(...opt))
   , emo2png = (emoji, s = 64) =>
     With(document.createElement('canvas'), c =>
       (c.width = c.height = s, Object.assign(c.getContext('2d'), { font: `${s * 0.8}px sans-serif`, textAlign: 'center', textBaseline: 'middle' }).fillText(emoji, s / 2, s / 2))
     )
 
-let map, c = useSwap({
+CSS.fx = document.startViewTransition?.bind?.(document) ?? (f => f())
+window.qs = s => document.querySelector(s)
+
+/// Composer
+window.c = useSwap({
   prj: '3D'
 })
 
+c.demo1 = async () => {
+  let pg = FnHoles()
+  await c.MapRect(pg.pts, pg.prov, console.info)
+  pg.pts([
+    { city: '北京', emo: '🎯' },
+    { city: '上海', emo: '✨' }
+  ])
+  pg.prov([
+    ['北京', 0.4, '你好'],
+    ['台湾', 0., '你好']
+  ])
+}
+
 
 // 初始化地图 OpenFreeMap Liberty 样式
-map = new maplibregl.Map({
+window.map = new maplibregl.Map({
   container: 'map', // 大屏幕容器
   ...useSwap({
     style: 'https://tiles.openfreemap.org/styles/liberty',
@@ -39,7 +57,7 @@ map = new maplibregl.Map({
     zoom: (c.prj == '3D') ? 2 : 5, // 初始缩放级别
     center: [109, 36], // 初始中心点 (中国)
   }, c => {
-    c.style = map.f12.urTile ?? c.style
+    c.style = map.urTile ?? c.style
     c.pitch = map.getPitch()
     c.zoom = map.getZoom()
     c.center = map.getCenter()
@@ -50,6 +68,22 @@ map = new maplibregl.Map({
   attributionControl: false,
 
 });
+
+map.f12_AOP = c => {
+  map.addControl(new maplibregl.NavigationControl(), "top-right")
+    .addControl(map.tileStyles(), 'bottom-right')
+    .addControl(new MaplibreInspect({
+      popup: new maplibregl.Popup({ closeButton: false, closeOnClick: true }),
+      ...c
+    }), 'bottom-right')
+    .addControl(new maplibregl.AttributionControl());
+}
+
+map.onGlobe = () => map.setProjection({ type: c.prj == '3D' ? 'globe' : 'mercator' })
+map.popup = s => With(new maplibregl.Popup({ closeOnClick: true }).trackPointer().setHTML(s).addTo(map), u => {
+  map.getCanvasContainer().dispatchEvent(new MouseEvent('mousemove', { clientX: map.xy.x, clientY: map.xy.y, bubbles: true }));
+})
+map.on('mousemove', (e) => { map.xy = e.point; });
 
 c.APP = `
 provinces-area-fill:
@@ -93,7 +127,7 @@ cities-o-circle:
   filter: ['has', 'point_count']
   paint:
     # 动态变色：数量小于10展示绿色，小于50展示黄色，大于50展示红色
-    circle-color: ['step', ['get', 'point_count'], '#51bbd6', 10, '#f1f075', 50, '#f28cb1']
+    circle-color: ['step', ['get', 'point_count'], '#51bbd6', 10, '#f28cb1', 50, '#f4cf29']
     circle-radius: ['step', ['get', 'point_count'], 20, 10, 30, 50, 40]
 
     circle-stroke-width: 2
@@ -102,8 +136,9 @@ cities-o-circle:
 cities-n-symbol:
   filter: ['has', 'point_count']
   layout:
+    text-font: ['Noto Sans Regular']
     text-field: '{point_count_abbreviated}'
-    text-size: 14
+    text-size: 16
   paint:
     text-color: '#ffffff'
 `;
@@ -115,15 +150,10 @@ window.CHINA_CITIES_DB = {
   '重庆': [29.56, 106.55], '拉萨': [29.64, 91.11], '哈尔滨': [45.75, 126.63], '天津': [39.12, 117.20],
   '香港': [22.31, 114.17], '澳门': [22.19, 113.54], '大理': [25.61, 100.27], '乌鲁木齐': [43.82, 87.61]
 }
-map._404 = [121, 25]
+map._404Redir = [0, 90]
 
 c.MapRect = async (rwPts, rwAreaHov, onArea, pts2card = u => `<h3>${u.city}:Tag#${u.emo}</h3>`) => {
 
-  map.onGlobe = () => map.setProjection({ type: c.prj == '3D' ? 'globe' : 'mercator' })
-  map.popup = s => With(new maplibregl.Popup({ closeOnClick: true }).trackPointer().setHTML(s).addTo(map), u => {
-    map.getCanvasContainer().dispatchEvent(new MouseEvent('mousemove', { clientX: map.xy.x, clientY: map.xy.y, bubbles: true }));
-  })
-  map.on('mousemove', (e) => { map.xy = e.point; });
 
   map.newP = P => ({ 'type': 'FeatureCollection', 'features': P })
   map.getP = useMemoKV(key => map.querySourceFeatures('provinces').find(u => u.properties.name.includes(key)));
@@ -154,53 +184,52 @@ c.MapRect = async (rwPts, rwAreaHov, onArea, pts2card = u => `<h3>${u.city}:Tag#
     'type': 'geojson', data: map.newP([]),
 
     cluster: true,
-    clusterMaxZoom: 14, // 当缩放级别大于 14 时，打散所有聚合 point_count
-    clusterRadius: 50,  // 聚合半径（像素）
+    clusterMaxZoom: 6, // 打散所有聚合 point_count
+    clusterRadius: 25,  // 聚合半径（像素）
   })
   map.addSource('provinces', {
     type: 'geojson',
-    data: './citi.json',
+    data: '/v2/citi.json',
     promoteId: 'adcode' // 用于 setFeatureState 和 filter
   });
   map.addUI(c.APP)
 
-  /// 用于：当前悬停foc的省份ID
+  // 我们监听 'provinces-area' 图层，这样只有点击到省份时才会触发
   let
+    ec = map.getCanvas().style,
     hov = useOldValue(id => map.setFeatureState({ source: 'provinces', id }, { hover: false })),
     foc = useOldValue((_, k) => {
       CSS.fx(() => map.setFilter('provinces-area-active', ['==', 'adcode', map.getP(k).id]))
         .finished.then(() => onArea(k.replace(/[省市]$/, '')))
     }, 'Taps'),
 
-    ec = map.getCanvas().style,
     setsEmo = useMemoKV(useCount((i, k) => (map.addImage(i, emo2png(k).getContext('2d').getImageData(0, 0, 64, 64)), i))),
-    setsPos = useMemoKV((k, v) => (v = CHINA_CITIES_DB[k]) ? [...v].reverse() : (v = map.getP(k), v ? JSON.parse(v.properties.centroid) : map._404))
+    setsPos = useMemoKV((k, v) => (v = CHINA_CITIES_DB[k]) ? [...v].reverse() : (v = map.getP(k), v ? JSON.parse(v.properties.centroid) : map._404Redir))
 
+  /// 用于：当前悬停/foc的省份ID
   let
     eHov = new maplibregl.Popup({ closeButton: false, closeOnClick: false }).trackPointer().addTo(map),
-    kHov = { 310000: '上海悬停' }
+    kHov = { 310000: '悬停在上海' },
+    hovT = useOldValue((_, k) => eHov.setHTML(kHov[k] ?? '')),
 
-  // 我们监听 'provinces-area' 图层，这样只有点击到省份时才会触发
-  Object.entries({
-    click: e => foc(e.features[0]?.properties?.name),
-    mouseenter: () => { ec.cursor = 'help'; }, mouseleave: () => { ec.cursor = ''; hov(0); eHov.setHTML('') },
+    appUX = Object.entries({
+      click: e => e.defaultPrevented || foc(e.features[0]?.properties?.name),
+      mouseenter: () => { ec.cursor = 'help'; }, mouseleave: () => { ec.cursor = ''; hov(0); eHov.setHTML('') },
 
-    mousemove: (e, k) => {
-      k = e.features[0]?.id
-      if (!!k) {
-        map.setFeatureState(
-          { source: 'provinces', id: hov(k) },
-          { hover: true }
-        );
-        eHov.setHTML(kHov[k] ?? '')
-      }
-    },
-  }).forEach(([k, f]) => {
-    map.on(k, 'provinces-area', f);
-  });
+      mousemove: (e, k) => {
+        k = e.features[0]?.id
+        if (!!k) {
+          map.setFeatureState(
+            { source: 'provinces', id: hov(k) },
+            { hover: true }
+          );
+          hovT(k)
+        }
+      },
+    })
 
 
-  // 将点数据转换为 GeoJSON 格式
+  // 将点数据转换为 GeoJSON、热力图 格式
   rwPts(set =>
     map.getSource('cities').setData(map.newP(set.map(P => ({
       'type': 'Feature',
@@ -219,42 +248,32 @@ c.MapRect = async (rwPts, rwAreaHov, onArea, pts2card = u => `<h3>${u.city}:Tag#
   })))
 
   // 监听聚合圈的点击事件
-  map.on('click', 'clusters', (e) => {
-    const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-    const id = features[0].properties.cluster_id;
-
-    map.getSource('cities').getClusterExpansionZoom(id, (err, zoom) => {
-      if (!err) map.easeTo({ zoom, center: features[0].geometry.coordinates });
-    });
+  map.popupP = (e, s, P = e.lngLat) => new maplibregl.Popup({ closeOnClick: !e.originalEvent.ctrlKey }).setLngLat(P).setHTML(s).addTo(map);
+  map.on('click', 'cities-o', async (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: ['cities-o'] });
+    const id = features[0].properties.cluster_id, a = await map.getSource('cities').getClusterLeaves(id, 100, 0)
+    //map.easeTo({ zoom, center: features[0].geometry.coordinates })
+    map.popupP(e, '<ol>' + a.map(u => `<li>${pts2card(u.properties)}</li>`).join('') + '</ol>')
   });
   // 城市点图层点击事件，弹出 Popup
   map.on('click', 'cities-emo', (e) => {
-    const xy = e.features[0].geometry.coordinates.slice();
+    e.preventDefault()
+    const xy = e.features[0].geometry.coordinates.slice(), f0 = onArea;
 
     // 确保在地图上移动时，即使经度超过 +/-180 度，Popup 也能正确显示
     while (Math.abs(e.lngLat.lng - xy[0]) > 180) {
       xy[0] += e.lngLat.lng > xy[0] ? 360 : -360;
     }
 
-    new maplibregl.Popup({ closeOnClick: !e.originalEvent.ctrlKey })
-      .setLngLat(xy)
-      .setHTML(pts2card(e.features[0].properties))
-      .addTo(map);
+    map.popupP(e, pts2card(e.features[0].properties), xy)
+    // onArea = (_ => onArea = f0)
+    // didEmo = true; setTimeout(() => didEmo = false, 1000)
+  });
+  appUX.forEach(([k, f]) => {
+    map.on(k, 'provinces-area', f);
   });
 
   await useEntry(map, 'idle')
   let e = qs(`#map`).style; e.setProperty('--t', '100%')
   setTimeout(() => e.mask = 'none', 1000)
 }
-  ; (async () => {
-    let pg = FnHoles()
-    await c.MapRect(pg.pts, pg.prov, console.info)
-    pg.pts([
-      { city: '北京', emo: '🎯' },
-      { city: '上海', emo: '✨' }
-    ])
-    pg.prov([
-      ['北京', 0.4, '你好'],
-      ['台湾', 0., '你好']
-    ])
-  })()

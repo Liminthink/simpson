@@ -1,5 +1,5 @@
 import StyleFlipperControl from "https://cdn.jsdelivr.net/npm/maplibre-gl-style-flipper@1.0.9/index.js";
-navigator.serviceWorker?.register?.('./sw.js')
+import { useCount, useChanged, emo2png } from "./citi.mjs"
 
 let togBW = useCount((i, s) => (i % 2 == 0) ? s : /carto/.test(s) ? map.tile2json('https://tile.openstreetmap.org/{z}/{x}/{y}.png')
   : s.replace(/(styles)\/dark/, '$1/liberty').replace(/(styles)\/fiord/, '$1/positron'))
@@ -7,11 +7,11 @@ let togBW = useCount((i, s) => (i % 2 == 0) ? s : /carto/.test(s) ? map.tile2jso
     ` provinces 省份 place 位置 transportation 路政 transportation_name 公路 boundary 边界 water 河湖 park 自然公园 landuse 开发用地 waterway 水运`
 
 StyleFlipperControl.prototype.switchStyle = function (styleClass, styleData) {
-  map.f12.urTile = togBW(styleData.url)
-  CSS.fx(() => this.map.setStyle(map.f12.urTile));
+  map.urTile = togBW(styleData.url)
+  CSS.fx(() => (this.map.setStyle(map.urTile), map.once('idle', () => CSS.fx(map.onGlobe))));
   this.currentStyleCode = styleData.code;
   this.highlightActiveStyle(styleClass);
-  map.popup(`🎯正在预览！刷新页面以体验地图主题`).on('close', () => history.go(0))
+  map.popup(`🎯正在预览！点击刷新以体验地图主题`).on('close', () => history.go(0))
 }
 
 
@@ -38,24 +38,29 @@ map.tile2json = ur => 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.
   glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf"
 }))
 
-map.f12 = new MaplibreInspect({
-  popup: new maplibregl.Popup({ closeButton: false, closeOnClick: false }),
+map.f12_AOP({
   toggleCallback(is, e) {
-    let zh = {}, s = F12_zh
+    let zh = {}, s = F12_zh, trKeep = /zh-Hant|ja|it/, trs = '',
+      tr = (e, m) => {
+        if (m = /name:(.+)/.exec(e.innerText)) {
+          if (trKeep.test(m[1])) {
+            if (m[1] == 'it') {
+              e.nextSibling.onclick = () => (e.closest(`.maplibregl-inspect_feature`).innerHTML = `<div style="display: grid;grid-template-columns: 10em 1fr;">${trs}`)
+              e.nextSibling.innerHTML = `Alt+Tab 📌`; trs = ''
+            }
+          } else (trs += `<abbr title=${m[1]}>${e.nextSibling.innerText}</abbr>`, e.parentNode.remove())
+        }
+        else { e.innerText = zh[e.innerText] ?? e.innerText }
+      }
     for (let [m, k, v] of (/(\S+)\s+(\S+)/g)[Symbol.matchAll](s)) { zh[k] = v }
     if (this.is = is)
       useChanged(() => {
         e = qs(`.maplibregl-inspect_popup`)
-        if (e) [...e.querySelectorAll(`.maplibregl-inspect_layer,.maplibregl-inspect_property-name`)].forEach(e => { e.innerText = zh[e.innerText] ?? e.innerText })
+        if (e) [...e.querySelectorAll(`.maplibregl-inspect_layer,.maplibregl-inspect_property-name`)].forEach(tr)
         return !this.is
       })
   }
 })
-
-map.addControl(new maplibregl.NavigationControl(), "top-right")
-  .addControl(map.tileStyles(), 'bottom-right')
-  .addControl(map.f12, 'bottom-right')
-  .addControl(new maplibregl.AttributionControl());
 
 qs('.maplibregl-ctrl-compass').onclick = () => (map.onGlobe(c.prj = (c.prj == '3D') ? '2D' : '3D'), map.popup(`<h3>${c.prj} 版地图功能</h3><pre>左上角可拖选推文的时间起止（分页）
 <mark>点击【每周情报总数】卡片<br>可按日浏览（前）7日贴文</mark>！

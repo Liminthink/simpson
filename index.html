@@ -39,6 +39,11 @@
   <link type="text/css" rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/dist/css/themes/goldenlayout-dark-theme.css" />
 
+  <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.2.0/dist/maplibre-gl.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-inspect@latest/dist/maplibre-gl-inspect.min.css"
+      rel="stylesheet" />
+  <link href="./v2/citi.css" rel="stylesheet" />
+      
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js"></script>
 
@@ -99,6 +104,7 @@
     #map {
       height: 100vh;
     }
+    
 
     filter#hue-grep1 {
       --bg: #f2efe9;
@@ -117,6 +123,9 @@
 
     ::highlight(fzf) {
       color: red;
+    }
+    .maplibregl-popup-content a {
+        text-decoration: 1px underline wavy blue;
     }
 
     .b-box {
@@ -187,7 +196,7 @@
     #map {
       width: 100%;
       height: 100%;
-      background-color: #aad3df !important;
+      background: linear-gradient(178deg, #404b52, 30%, #aad3df);
       object-fit: cover;
       filter: url(#hue-grep1) url(#hue-grep3);
       /* 模拟科技感冷色调 */
@@ -209,6 +218,7 @@
       bottom: 0;
       left: 0;
       position: fixed;
+      z-index: 99;
       opacity: 0.7;
       mix-blend-mode: multiply;
       transition: .7s filter, .1s translate;
@@ -307,7 +317,7 @@
 
 
       window.cMap = {
-        crop: true, p_line: true, emo: `劳工💪 教育📚 维权😾 国际🕊 救生🙏
+        crop: true, p_line: !true, emo: `劳工💪 教育📚 维权😾 国际🕊 救生🙏
 民生❤️ 观点✍️ 经济💎 案事件😡 流行👍 卫生💦 政治😎
 劳权💪 环保💦 学校📚 食品安全🍔 上访🏛 案情😡 C🏛 A🏛 B🏛 求助🙏 建议🌈 投诉✍️`, kHeat: 1, kPos: 1, kBnd: 1.5, lWord: 4, modeHot: 'views'
       }
@@ -345,9 +355,19 @@
               })
               .value();
 
-            gis?.eachLayer(u => cMap.drawHeat(u.feature, u))
+            if(window.pg) {
+              let a=Object.values(city), k0 = _.min(a), k1 = Math.log(_.max(a) - k0 + 1)
+              pg.prov(_.entries(cityPer).map(([k, ls],n)=>[
+                k,
+                n=.7*(Math.log(city[k] - k0 + 1) / k1),
+                `<mark>${k}</mark><br>时段总热度: ${n.toFixed(0)}` + ls
+              ]))
+              dark.remove()
+            }
+            else gis?.eachLayer(u => cMap.drawHeat(u.feature, u))
             seeAll(a)
           }
+          if(window.pg) { dark.remove(); seeWd('') }
 
           map1 = MapRect('map', (id, s) => `
       我在${s}，<a href=//x.com/i/status/${id}>见证了这个</a>
@@ -367,7 +387,8 @@
             if (k.substr) seeCmt(a)
             seeTop(a)
             seeWeek(a)
-            seeWd(a.map(u => u.txt).join(''), k.substr ? k : `手气不错`)
+            seeWd(a.map(u => u.txt).join(''), k.substr ? `@${k}` : `手气不错`)
+            qs(`#map`).style.setProperty('--t', '100%')
           }, (k, v, n) => {
             if (k == '台湾') v.bindTooltip(`<mark>点击以显示所有城市（慢）</mark>`)
             if (!(n = city[k])) { return }
@@ -377,7 +398,7 @@
             })
             v.bindTooltip(`<mark>${k}</mark><br>时段总热度: ${n.toFixed(0)}` + cityPer[k])
           })
-          if (g) map.append(g)
+          if (g) qs(`#map`).append(g)
         }
 
       onMap()
@@ -394,6 +415,14 @@
       })
 
     })</script>
+    <script type="module">
+      (location.hash=='#old') || (window.pg='Ugly v1', async()=>{
+      let {FnHoles} = await import("./v2/citi.mjs")
+      import("./v2/citi-btns.mjs")
+      window.pg = FnHoles()
+      c.MapRect(pg.pts, pg.prov, k=>seeAll(k), u=> `我在${u.city}，<a href=//x.com/i/status/${u.id}>见证了${u.tag||'这个'}</a>`)
+      })()
+    </script>
 
 
   <!-- 步骤1: 模拟从外部JS文件 <script src=".../china-cities-db.js"></script> 加载城市坐标数据 -->
@@ -418,7 +447,9 @@
       findAll = (obj, is) => (typeof obj == 'object') ? [...(is(obj) ? [obj] : []), ..._.flatMap(obj, v => findAll(v, is))] : []
 
 
+    window.qs = s => document.querySelector(s)
     CSS.fx = document.startViewTransition?.bind?.(document) ?? (f => f())
+
     document.styleSheets.onAdd = () => [...document.styleSheets].flatMap(u => { try { return [...u.rules] } catch { } }).forEach((u, _, m, e, e0) => {
       if (m = /^filter#(\D+?)(\d+)/.exec(u?.selectorText)) {
         e0 = css_paint.querySelector(`#${m[1]}0`); e = e0.cloneNode(true); e.id = m[1] + m[2];
@@ -461,23 +492,24 @@
         </button>
         <button
           class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
-          📱科技
+          📱有图
         </button>
         <button
           class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
-          🌻Good News
+          🌻民生
+        </button>
+        <button
+          class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
+          🎯速报
         </button>
       </div>
 
       <div class="flex items-center space-x-3">
         <span class="text-white font-black tracking-widest text-sm"
-          style="font-family: 'Courier New', Courier, monospace;">WHYO WEEKLY</span>
+          style="font-family: 'Courier New', Courier, monospace;">WHYO MAPS</span>
         <span class="text-gray-500 text-[10px]">v2.1</span>
-        <span class="text-gray-500 text-[10px]">@WhyYou<u><a
-              href=https://x.com/whyyoutouzhele/media>touzhele</a></u></span>
         <span id=icSetup
           class="bg-[#e11d48] text-white font-extrabold px-1.5 py-0.5 rounded text-[10px] tracking-tight border border-[#fb7185] shadow-[0_0_10px_rgba(225,29,72,0.4)]">
-          2026A103
         </span>
       </div>
 
@@ -520,7 +552,7 @@
   </nav>
   <div id="layoutContainer"></div>
   <ul id=talk class="list"></ul>
-  <div id="c">
+  <div>
     <div id="wc" class="b-box"></div>
     <div id="bar" class="b-box"></div>
     <div id="pie" class="b-box"></div>
@@ -528,6 +560,7 @@
     <div id="liner" class="b-box py-10"></div>
     <ul id=aigc class="list"></ul>
   </div>
+
   <script type="module">
     // 直接从 CDN 导入标准的 ES 模块，彻底解决全局变量未定义问题
     import { GoldenLayout } from 'https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/+esm';
@@ -648,6 +681,18 @@
     window.addEventListener('resize', () => {
       gui.updateSize();
     });
+      if (window.icTalk) icTalk.onclick = (ev) => {
+        let A = (min, max) => Math.random() * (max - min) + min;
+
+        confetti({
+          angle: 55,
+          spread: A(50, 70),
+          particleCount: A(50, 100),
+          origin: { y: 0.8, x: 0 },
+          scalar: 2,
+          shapes: ['star'].concat([..."😾🙏🔍🌈🌹🌏"].map(s => confetti.shapeFromText({ text: s, scalar: 2 })))
+        });
+      }
 
     /**
  * 创建一个仅限于中国区域的二维地图实例
@@ -655,6 +700,7 @@
  * @returns {function} - 绘制浮标[k:v,]的函数
  */
     window.MapRect = (el, onMarkerHTML, ..._3) => {
+      if(window.pg) return _=>"👍"
       // 步骤2: 定义中国的地理边界
       const chinaBounds = L.latLngBounds(
         L.latLng(10, 64), // 西南角
@@ -677,18 +723,6 @@
       mapDragRect(u)
 
       u.attributionControl._container.onclick = () => confetti.ukraine()
-      if (window.icTalk) icTalk.onclick = (ev) => {
-        let A = (min, max) => Math.random() * (max - min) + min;
-
-        confetti({
-          angle: 55,
-          spread: A(50, 70),
-          particleCount: A(50, 100),
-          origin: { y: 0.8, x: 0 },
-          scalar: 2,
-          shapes: ['star'].concat([..."😾🙏🔍🌈🌹🌏"].map(s => confetti.shapeFromText({ text: s, scalar: 2 })))
-        });
-      }
 
       // 返回核心的绘图函数
       const markerLayer = L.markerClusterGroup({ zoomToBoundsOnClick: true }).addTo(u);
@@ -763,7 +797,7 @@
       u.on({ click() { g0?.setStyle(mo); g0 = null } })
     }
 
-    MapRect.UI = (u, upd, g = new GUI({ title: '地图显示设置', container: map })) => {
+    MapRect.UI = (u, upd, g = new GUI({ title: '地图显示设置', container: qs(`#map`) })) => {
       g.add(u, 'crop').name('⚠️调参后-点我两下').onChange(upd);
 
       g.add(u, 'p_line').name('折线图展示-重选省份');
@@ -783,16 +817,16 @@
 
       g.add(u, 'lWord', 3, 10, 1).name('词云词密度-重拖窗口').onChange(() => wc.resize());
 
-      g.addFolder("提示：顶栏的按钮皆可点击 💎")
+      g.addFolder("提示：顶栏的按钮皆可点击 💎").$children.innerHTML=`<a href=#old>- 访问旧版</a>`
       g.addFolder("ABCD表示[春夏秋冬]4个季度，比如：").open(0)
       g.addFolder("D030=10.30, D230=12.30 📈旧文按月索引(2词云/月)")
       g.hide()
-      icSetup.onclick = () => g._hidden ? (g.show(), g.domElement.style.cssText = `position: absolute; bottom: 0;  right: 0;`) : confetti.ukraine(5, ['#ee0000', '#66ccff'])
+      icSetup.onclick = () => g._hidden ? (g.show(), g.domElement.style.cssText = `position: absolute; bottom: 0;  right: 0;z-index: 99;`) : confetti.ukraine(5, ['#ee0000', '#66ccff'])
 
     }
 
     MapRect.DateUI = ({ A = Date.now() - 6 * 864e5, B = Date.now() }) => {
-      const gui = new GUI({ title: 'WHYO Times 雪花时光机', container: map.parentNode });
+      const gui = new GUI({ title: 'WHYO Times 雪花时光机', container: qs(`#map`).parentNode });
       gui.domElement.style.cssText = `position: absolute;top: 0;opacity: .7;`
 
       // 格式化为 YYYY-MM-DD，原生 type="date" 强依赖此格式
@@ -950,7 +984,8 @@
           )
           .toPairs().value();
 
-        add(a.flatMap(([k, a]) => a.map(x => [k, `${x.id}\t${MapRect.emo[x.tag] ?? '✊'}`])))
+        if(window.pg) pg.pts(a.flatMap(([k, a]) => a.map(x => ({city: k, id:x.id+'', tag: x.tag, emo: MapRect.emo[x.tag] ?? '✊'})) ));
+        else add(a.flatMap(([k, a]) => a.map(x => [k, `${x.id}\t${MapRect.emo[x.tag] ?? '✊'}`])))
 
 
 
@@ -1024,9 +1059,10 @@
 
       seeWeek = a => {
 
-        let wm = _.countBy(a, item => new Date(item.dt).getDay()), source = [1, 2, 3, 4, 5, 6, 0].map(dayNum => {
-          const label = '周' + (dayNum === 0 ? '日' : ['一', '二', '三', '四', '五', '六'][dayNum - 1]);
-          return [label, wm[dayNum] ?? 0];
+        let d0 = new Date().getDay(), wm = _.countBy(a, item => new Date(item.dt).getDay()), source = [1, 2, 3, 4, 5, 6, 7].map(dayNum => {
+          const label = '周' + '一二三四五六日'[dayNum - 1];
+          d0=(d0 == 0)? 7 : d0
+          return [(dayNum > d0? "上":"") + label, wm[dayNum%7] ?? 0];
         }),
           lin = cMap.p_line ? {
             type: 'line', smooth: true, symbol: 'circle', symbolSize: 12,
@@ -1036,7 +1072,6 @@
           ]
 
         liner.setOption({
-          title: ti('按周贴文数量'),
           dataset: { source }, //[['周1', 10], ['周2', 15]]
           tooltip: {
             trigger: 'axis', // 设置为 'axis' 或 'item'
