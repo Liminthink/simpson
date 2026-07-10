@@ -26,13 +26,42 @@ export const
       (c.width = c.height = s, Object.assign(c.getContext('2d'), { font: `${s * 0.8}px sans-serif`, textAlign: 'center', textBaseline: 'middle' }).fillText(emoji, s / 2, s / 2))
     )
 
+
+  , useVisibleEventPair = (e, rw, percent = 10) => {
+    // use IntersectionObserver(e)
+    let opt = {
+      root: null, // viewport
+      rootMargin: '0px',
+      threshold: percent / 100,
+    },
+      res = new IntersectionObserver((entries) => {
+        entries.forEach(it => rw(!it.isIntersecting));
+      }, opt);
+
+    res.observe(e);
+    return () => res.disconnect();
+  }
+
+{
+  let n = 1, app = document.body, e = app.appendChild(document.createElement('style'))
+  CSS.listen = (rule, rw_is) => {
+    let k = `--js_f${n}`, js_fn = app.appendChild(document.createElement('span'))
+    js_fn.style.cssText = ` position: fixed; top: 0; display: var(${k}); `
+    rule(qs => e.textContent += `:has(${qs}){${k}: none}`); n++
+    useVisibleEventPair(js_fn, rw_is, 100)
+  }
+}
+
 CSS.fx = document.startViewTransition?.bind?.(document) ?? (f => f())
+CSS.src=s=>document.adoptedStyleSheets.push(With(new CSSStyleSheet(),c=>c.replaceSync(s)) )
+CSS.svg=([W,H],s)=>`data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}'%3E${encodeURI(s)}%3C/svg%3E`
 window.qs = s => document.querySelector(s)
 
 /// Composer
 window.c = useSwap({
-  prj: '3D'
-})
+  prj: '3D',
+  wm: {}
+}, c => c.wm = window.gui?.saveLayout())
 
 c.demo1 = async () => {
   let pg = FnHoles()
@@ -189,7 +218,7 @@ c.MapRect = async (rwPts, rwAreaHov, onArea, pts2card = u => `<h3>${u.city}:Tag#
   })
   map.addSource('provinces', {
     type: 'geojson',
-    data: '/v2/citi.json',
+    data: 'https://liminthink.github.io/simpson/v2/citi.json',
     promoteId: 'adcode' // 用于 setFeatureState 和 filter
   });
   map.addUI(c.APP)

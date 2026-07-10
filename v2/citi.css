@@ -36,3 +36,19 @@
     border-radius: 0;
     background-repeat: repeat-x;
 }
+
+
+/*shareUI*/
+#shr {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    justify-items: center;
+    padding-top: 3em;
+    gap: 15px;
+}
+#shr p { color: wheat }
+#shr img { width: 60px }
+#shr :nth-child(2) img {background-color: #00c800; border-radius: 50%; border-top-right-radius: 0;}
+#shr :nth-child(3) img {border-radius: 50%;}
+
+

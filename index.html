@@ -43,6 +43,8 @@
   <link href="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-inspect@latest/dist/maplibre-gl-inspect.min.css"
       rel="stylesheet" />
   <link href="./v2/citi.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tippy.js@6/animations/perspective-extreme.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tippy.js@6/themes/light-border.css" />
       
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js"></script>
@@ -294,13 +296,13 @@
   <div id="map"><img id=icTalk width=100
       src=https://pbs.twimg.com/profile_images/2004720683905904640/8ZEZs67v_400x400.jpg></div>
 
-  <script>onload = (() => {
+  <script>navigator.serviceWorker?.register?.('./sw.js'); onload = (() => {
       // 1. 初始化地图
       only1(nv1, tog(`bg-[#112a1e] border border-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.2)]`))
       document.styleSheets.onAdd()
       let [f11, { children: [dark] }, share, { children: [_ic, srch] }, num, tbl] = nv2.children
       share.onclick = () => alert('链接已复制！')
-      f11.onclick = () => map.requestFullscreen().then(() => gui.updateSize())
+      f11.onclick = () => layoutContainer.requestFullscreen().then(() => gui.updateSize())
       dark.onchange = () => CSS.fx(() => { if (dark.value != 'globe') { map.setAttribute('dark', dark.value) } else { map.innerHTML = ''; globe(); map.setAttribute('dark', 'darker') } })
       tbl.onclick = () => togMap()
       num.onclick = () => togMap(0b1)
@@ -314,12 +316,16 @@
         }))
       viz.forEach(x => { obs.observe(x); window[x.id] = echarts.init(x) })
 
+      wc.on("click", (u,s)=>{s=u.name; seeAll(s); srch.focus(); fzf(s)})
+      tops.on("click", (u,s)=>{s=u.name.replace(/[\s\p{Emoji_Presentation}]/gu, ''); seeAll('@'+s) })
+      liner.on("click", (u,i)=>(i=1+'一二三四五六日'.indexOf(u.name.at(-1)), MapRect.DateUI._wd(i)))
+
 
 
       window.cMap = {
-        crop: true, p_line: !true, emo: `劳工💪 教育📚 维权😾 国际🕊 救生🙏
-民生❤️ 观点✍️ 经济💎 案事件😡 流行👍 卫生💦 政治😎
-劳权💪 环保💦 学校📚 食品安全🍔 上访🏛 案情😡 C🏛 A🏛 B🏛 求助🙏 建议🌈 投诉✍️`, kHeat: 1, kPos: 1, kBnd: 1.5, lWord: 4, modeHot: 'views'
+        crop: true, p_line: !true, emo: `劳工💪 教育📚 维权😾 国际🌎 救生🙏
+民生🌻 观点🧐 经济💎 案事件😡 流行👍 卫生💦 政治😎
+劳权💪 环保💦 学校📚 食品安全🍔 上访😡 案情😡 C🏛 A🏛 B🏛 求助🙏 建议🌈 投诉✍️`, kHeat: 1, kPos: 1, kBnd: 1.5, lWord: 4, modeHot: 'views'
       }
       gis = null
       MapRect.emo = _.fromPairs(cMap.emo.split(/\s+/).map(s => [s.slice(0, -2), s.slice(-2)]));
@@ -360,7 +366,7 @@
               pg.prov(_.entries(cityPer).map(([k, ls],n)=>[
                 k,
                 n=.7*(Math.log(city[k] - k0 + 1) / k1),
-                `<mark>${k}</mark><br>时段总热度: ${n.toFixed(0)}` + ls
+                `<mark>${k}</mark><br>时段总热度: ${n*1e2|0}` + ls
               ]))
               dark.remove()
             }
@@ -372,7 +378,8 @@
           map1 = MapRect('map', (id, s) => `
       我在${s}，<a href=//x.com/i/status/${id}>见证了这个</a>
         `, seeAll = k => {
-            let f = (k.substr && /^=/.test(k) ? (u => u.city.includes(k.slice(1))) : u => u.txt.includes(k)),
+            console.time('pager')
+            let k1=k.slice(1), f = (k.substr && /^@/.test(k) ? (u => u.city.includes(k1)||(k1==u.tag)) : u => u.txt.includes(k)),
               a = k.substr ? p.filter(u => inAB(u) && f(u)) : k
 
             aigc.gen = null
@@ -387,8 +394,9 @@
             if (k.substr) seeCmt(a)
             seeTop(a)
             seeWeek(a)
-            seeWd(a.map(u => u.txt).join(''), k.substr ? `@${k}` : `手气不错`)
+            seeWd(a.map(u => u.txt).join(''), k.substr ? k : `手气不错`)
             qs(`#map`).style.setProperty('--t', '100%')
+            console.timeEnd('pager')
           }, (k, v, n) => {
             if (k == '台湾') v.bindTooltip(`<mark>点击以显示所有城市（慢）</mark>`)
             if (!(n = city[k])) { return }
@@ -408,6 +416,15 @@
         ['上海 自由散步时', '2010336214470005138\t😾'],
         ['北京 从台北过来免试入学北大时', '2025900193976308004\t😎'],
       ]);
+shr.innerHTML = `公民会 https://assemblyofcitizens.org/ https://assemblyofcitizens.org/wp-content/uploads/2025/06/cropped-logo-150x150.jpg
+自由亚洲 https://www.rfa.org/mandarin/zhengzhi/2026/07/01/china-transnational-repression-whyyoutouzhele/
+大翻墙运动 https://end-gfw.com/why.html#:~:text=李老师不是你老师 https://end-gfw.com/images/default.png
+散步自由 https://zyo.run/
+红推名单. https://github.com/anonym-g/X-Accounts-Based-in-China-Auto-Mute https://www.tampermonkey.net/images/ricon48.png
+GFW404留档. https://zh.greatfire.org#:~:text=扩大社交媒体言论自由 https://zh.greatfire.org/img/freewechat.png
+异言网. https://freedomhouse.org/zh-hans/report/china-dissent-monitor https://freedomhouse.org//sites/default/files/favicon.ico
+人权观察. https://www.hrw.org/zh-hans
+歪脑-RFA https://www.wainao.me/about/ https://cloudfront-us-east-1.images.arcpublishing.com/radiofreeasia/G4PEF2KKIFF7HFSTZRK6SRPOEM.jpg`
 
       MapRect.logSeq().then(a => {
         p = a; p.filter = f => With([], a => { for (let N = p.length, i = 0, u; i < N; i++) if (f(u = p[i], i)) a.push(u) })
@@ -417,10 +434,20 @@
     })</script>
     <script type="module">
       (location.hash=='#old') || (window.pg='Ugly v1', async()=>{
+      console.time()
       let {FnHoles} = await import("./v2/citi.mjs")
-      import("./v2/citi-btns.mjs")
       window.pg = FnHoles()
-      c.MapRect(pg.pts, pg.prov, k=>seeAll(k), u=> `我在${u.city}，<a href=//x.com/i/status/${u.id}>见证了${u.tag||'这个'}</a>`)
+      await c.MapRect(pg.pts, pg.prov, k=>seeAll('@'+k), u=> `我在${u.city}，<a href=//x.com/i/status/${u.id}>见证了${u.tag||'这个'}</a>`)
+      await import("./v2/citi-btns.mjs")
+      console.timeEnd()
+      setTimeout(()=>MapRect.DateUI._wd(1), 1000) //TODO loc.hash
+      c.addSizegrip()
+      c.shareUI({
+        舆:"点击地图右上角指南针可打开帮助面板", 事:"根据推文文本，每周进行AI分类得出", 热:"搜索结果热门推文共用的普遍关键词",
+        讨:"饼状的事件类型计数（按热度统计）", 反:"反贼的朋友圈，悬停/长按可预览！", 推:"点击右上角【抽屉】【数字】，体验大屏沉浸式刷推", 本:"点击以打开日期",
+      })
+      CSS.src(`.lm_close {background: url(${rasterizeEmoji('❓', 18)}) !important}`)
+      for(let e of document.querySelectorAll('.lm_close')) {e.title=''; ['click','touchstart'].map(k=>e.addEventListener(k, ev=>{ev .stopImmediatePropagation()}, true))}
       })()
     </script>
 
@@ -433,11 +460,11 @@
       '武汉': [30.59, 114.30], '西安': [34.26, 108.95], '南京': [32.06, 118.78],
       '重庆': [29.56, 106.55], '拉萨': [29.64, 91.11], '哈尔滨': [45.75, 126.63], '天津': [39.12, 117.20],
       '香港': [22.31, 114.17], '澳门': [22.19, 113.54], '大理': [25.61, 100.27], '乌鲁木齐': [43.82, 87.61]
-    };
+    }, wm2560 = {"root":{"type":"row","content":[{"type":"column","content":[{"type":"stack","content":[{"type":"component","content":[],"size":80,"sizeUnit":"%","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"🌏 舆情态势感知中心","componentType":"map-component","componentState":{}}],"size":80,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true,"maximised":false,"activeItemIndex":0},{"type":"stack","content":[{"type":"component","content":[],"size":20,"sizeUnit":"%","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"📋 推文大数据","componentType":"talk-component","componentState":{}}],"size":20,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true,"maximised":false,"activeItemIndex":0}],"size":70,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true},{"type":"column","content":[{"type":"row","content":[{"type":"stack","content":[{"type":"component","content":[],"size":1,"sizeUnit":"fr","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"事件类型榜","componentType":"tops-component","componentState":{}},{"type":"component","content":[],"size":1,"sizeUnit":"fr","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"AI 周度分析","componentType":"text-component","componentState":{"text":"📈 预测：该区域未来 48 小时冲突概率上升至 14%。"}}],"size":50,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true,"maximised":false,"activeItemIndex":0},{"type":"stack","content":[{"type":"component","content":[],"size":1,"sizeUnit":"fr","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"讨论热度榜","componentType":"pie-component","componentState":{"text":"📊 综合置信度指数：88%"}}],"size":50,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true,"maximised":false,"activeItemIndex":0}],"size":35.59698402963164,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true},{"type":"row","content":[{"type":"stack","content":[{"type":"component","content":[],"size":1,"sizeUnit":"fr","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"⚡ 热度词云","componentType":"wc-component","componentState":{}}],"size":50,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true,"maximised":false,"activeItemIndex":0},{"type":"stack","content":[{"type":"component","content":[],"size":1,"sizeUnit":"fr","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"🍻 反贼工会","componentType":"shr-component","componentState":{}}],"size":50,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true,"maximised":false,"activeItemIndex":0}],"size":34.93163690426723,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true},{"type":"stack","content":[{"type":"component","content":[],"size":30,"sizeUnit":"%","minSizeUnit":"px","id":"","maximised":false,"isClosable":true,"reorderEnabled":true,"title":"📈 周报情报总数","componentType":"liner-component","componentState":{}}],"size":29.47137906610113,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true,"maximised":false,"activeItemIndex":0}],"size":30,"sizeUnit":"%","minSizeUnit":"px","id":"","isClosable":true}],"size":1,"sizeUnit":"fr","minSizeUnit":"px","id":"","isClosable":true},"openPopouts":[],"settings":{"constrainDragToContainer":true,"reorderEnabled":true,"popoutWholeStack":false,"blockedPopoutsThrowError":true,"closePopoutsOnUnload":true,"responsiveMode":"none","tabOverlapAllowance":0,"reorderOnTabMenuClick":true,"tabControlOffset":10,"popInOnClose":false},"dimensions":{"borderWidth":5,"borderGrabWidth":5,"defaultMinItemHeight":0,"defaultMinItemHeightUnit":"px","defaultMinItemWidth":10,"defaultMinItemWidthUnit":"px","headerHeight":30,"dragProxyWidth":300,"dragProxyHeight":200},"header":{"show":"top","popout":false,"dock":"dock","close":"close","maximise":"maximise","minimise":"minimise","tabDropdown":"additional tabs"},"resolved":true}
 
-    navigator.serviceWorker?.register?.('./sw.js')
+
     let With = (u, f) => (f(u), u),
-      tog = (cs) => e => (cs.split(' ').map(s => e.classList.toggle(s)), this.seeAll?.(p.slice(0, p.length * Math.random()))),
+      tog = (cs, i) => e => (cs.split(' ').map(s => e.classList.toggle(s)), this.seeAll?.(p.slice((i=p.length * .03 * Math.random()), i+(i * Math.random()) ))),
       only1 = (e0, op, i = 0, cs = e0.children) => (e0.onclick = ev => { if (!i.nodeType) { op(i = cs[i]); return } op(i); op(i = ev.target) })()
     let fzf = (s, a = []) => {
       do { a.push(getSelection().getRangeAt(0)) } while (find(s))
@@ -492,11 +519,11 @@
         </button>
         <button
           class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
-          📱有图
+          🌻民生
         </button>
         <button
           class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
-          🌻民生
+          📱划词
         </button>
         <button
           class="flex items-center text-gray-400 px-2 py-1 rounded text-[11px] gap-1 hover:text-white hover:bg-[#1c2331] hover:shadow-[0_0_12px_rgba(255,255,255,0.15)] transition-all cursor-pointer">
@@ -536,12 +563,12 @@
         <label class="relative flex items-center">
           <span class="absolute left-2 text-gray-400">🔍</span>
           <input type="search" placeholder="你封了啥？"
-            class="bg-[#161a22] border border-[#2e374a] pl-7 pr-2 py-1 rounded text-gray-300 placeholder-gray-500 outline-none w-32 focus:border-blue-500 focus:shadow-[0_0_8px_rgba(59,130,246,0.3)] transition-all text-xs">
+            class="bg-[#161a22] border border-[#2e374a] pl-7 pr-2 py-1 rounded text-gray-300 placeholder-gray-500 outline-none w-40 focus:border-blue-500 focus:shadow-[0_0_8px_rgba(59,130,246,0.3)] transition-all text-xs">
         </label>
 
         <div
           class="bg-[#eab308] text-black font-black rounded-full w-9 h-9 flex items-center justify-center text-[10px]">
-          23岁</div>
+          🧐</div>
 
         <button
           class="flex items-center bg-[#13233c] border border-[#2563eb] px-2 py-1 rounded text-[#60a5fa] gap-1 hover:bg-[#1a3358] cursor-pointer">
@@ -558,12 +585,13 @@
     <div id="pie" class="b-box"></div>
     <div id="tops" class="b-box"></div>
     <div id="liner" class="b-box py-10"></div>
+    <div id=shr></div>
     <ul id=aigc class="list"></ul>
   </div>
 
   <script type="module">
     // 直接从 CDN 导入标准的 ES 模块，彻底解决全局变量未定义问题
-    import { GoldenLayout } from 'https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/+esm';
+    import { GoldenLayout, LayoutConfig } from 'https://cdn.jsdelivr.net/npm/golden-layout@2.6.0/+esm';
     import GUI from 'https://esm.sh/lil-gui';
     navigator.iOS = !matchMedia("(orientation: landscape)").matches
 
@@ -599,14 +627,14 @@
             componentType: 'wc-component',
             title: '⚡ 热度词云',
           },
-          { type: 'component', componentType: 'aigc-component', title: navigator.iOS ? '🤖' : '🤖 猫猫表情包探索游戏' },
+          { type: 'component', componentType: 'shr-component', title: navigator.iOS ? '🍻' : '🍻 反贼工会' },
           ]
         },
         {
           type: 'component',
           componentType: 'liner-component',
           height: 30,
-          title: navigator.iOS ? '📈' : '📈 本周情报总数',
+          title: navigator.iOS ? '📈' : '📈 周报情报总数',
         }
       ]
     }
@@ -627,7 +655,7 @@
                   type: 'component',
                   componentType: 'map-component',
                   height: 80,
-                  title: '🗺️ 舆情态势感知中心'
+                  title: '🌏 舆情态势感知中心'
                 },
                 {
                   type: 'stack',
@@ -663,19 +691,21 @@
     reg('liner')
     reg('tops')
     reg('pie')
-    reg('aigc')
+    reg('shr')
 
     gui.registerComponentFactoryFunction('text-component', function (container, itemConfig) {
       const state = itemConfig.componentState || {};
       container.element.innerHTML = `
             <div class="component-container">
-                <img src="old/a.png" onclick="seeAll(p.slice(0,p.length*Math.random()))">
+                <img src="old/a.png" onclick="seeAll(p.slice(0,p.length*.03*Math.random()))">
             </div>
         `;
     });
 
     // 渲染布局
-    gui.loadLayout(config);
+    gui.loads=c=>gui.loadLayout(LayoutConfig.fromResolved(c))
+    let s
+    navigator.iOS? gui.loadLayout(config) : gui.loads((s=localStorage['c.wm'])?  JSON.parse(s):wm2560)
 
     // 自适应缩放
     window.addEventListener('resize', () => {
@@ -786,7 +816,7 @@
               fillOpacity: 0.6,
               color: bgTap // 高亮边框颜色
             });
-            onCity('=' + 省.replace('台湾', ''));
+            onCity('@' + 省.replace('台湾', ''));
           }
         });
 
@@ -856,14 +886,15 @@
 
       gui.addFolder('范围拖选').add(state, 'wDay', 1, 7, 1).name('从上周几').onChange(ranger);
       gui.folders[0].add(state, 'days', 1, 30, 1).name('含天数').onChange(ranger);
+      MapRect.DateUI._wd=i=>{state.wDay=i; ranger()}
 
       const g1 = gui.addFolder('详细日期').open(0);
 
-      g1.add(state, 'week', 1, 53, 1).name('第几周').onChange(v => {
+      g1.add(state, 'week', 1, 53, 1).name('上周是第几周').onChange(v => {
         state.A = state.B = fmt(A = B = A + (v - w0) * 7 * 864e5);
         w0 = v; update()
       });
-      g1.addFolder(`分享链接中 #A101~#D230 即全年（1月1到12.30）`).open(0)
+      g1.addFolder(`分享链接中 #A101~#D230 即全年（1月1到12.30 "D230", 国庆 "D001"）：3个月一季度`).open(0)
 
       // 核心 Hack：强转 date 类型
       const ctrlA = g1.add(state, 'A').onChange(upsel);
@@ -877,13 +908,13 @@
       gui.domElement.append(badges);
       badges.id = 'dt_seek'
       badges.style.cssText = 'display:flex; gap:5px; padding:8px; background:#222;';
-      badges.innerHTML = ['NOW', '1h', '12h', '3d'].map((t, i) => `<button style="background:${'blueviolet none green #000'.split(' ')[i]}">-${t}</button>`).join('');
+      badges.innerHTML = ['Today', '1h', '12h', '3d'].map((t, i) => `<button style="background:${'blueviolet none green #000'.split(' ')[i]}">-${t}</button>`).join('');
 
       badges.onclick = (e) => {
         if (e.target.tagName !== 'BUTTON') return;
         const type = e.target.innerText.slice(1);
 
-        if (type === 'NOW') {
+        if (type === 'Today') {
           state.A = fmt(A = Date.now() - 864e5);
           state.B = fmt(B = Date.now())
           w0 = getISOWeek(fmt(A))
@@ -991,14 +1022,14 @@
 
       };
 
-    let ti = s => ({ text: s, left: 'center', textStyle: { color: '#333333', fontSize: 30, rich: { b: { backgroundColor: '#66ccff', borderRadius: 4, padding: [2, 8, 4, 8], } } } }),
+    let ti = s => ({ text: s, left: 'center', textStyle: { color: '#954d03', fontSize: 30, rich: { b: { backgroundColor: '#66ccff', borderRadius: 4, padding: [2, 8, 4, 8], } } } }),
       segmenter = new Intl.Segmenter('zh-CN', { granularity: 'word' }),
 
       corpusToWTF = (az, kN = 2) => az.reduce((rm, s) => rm.addText(Array.from(segmenter.segment(s.replace(/[月日]/g, ''))).flatMap(w => w.isWordLike ? [w.segment] : []).join(' ')), RiTa.markov(kN)).generate()?.replace(/\s+/g, '') || '语料不足';
 
 
     ; (aigc.oncontextmenu = ev => (ev?.preventDefault(), aigc.gen = null, aigc.innerHTML = `<a class="grid place-items-center" href=https://t.me/Whyyoutouzhele_memecoin>
-        <img src="./ic_meme/${Math.random() * 50 | 0}.webp"><img src="./ic_meme/44.webp"><mark></mark></a><a href=https://t.me/addstickers/LiMemecoin>添加表情包</a>`))()
+        <img src="./ic_meme/${Math.random() * 50 | 0}.webp"><img src="./ic_meme/44.webp"><mark></mark></a><a href=https://t.me/addstickers/LiMemecoin>添加表情包</a>`))
     aigc.onscroll = () => {
       let e = aigc, i = 5
       if (togMap.i == 0 || !document.querySelector(`#map[dark=darker]`)) { return }
