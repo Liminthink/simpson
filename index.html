@@ -341,7 +341,7 @@
 
           tPag.onchange = (A, B) => {
             console.log(tPag)
-            inAB = u => (A < u.dt && u.dt < B)
+            inAB = u => (A < u.dt && u.dt < B); inAB.B=B
             let a = p.filter(inAB)
             cityData(a, map1)
 
@@ -382,6 +382,8 @@
             let k1=k.slice(1), f = (k.substr && /^@/.test(k) ? (u => u.city.includes(k1)||(k1==u.tag)) : u => u.txt.includes(k)),
               a = k.substr ? p.filter(u => inAB(u) && f(u)) : k
 
+
+            qs(`#map`).style.setProperty('--t', '10%')
             aigc.gen = null
             num.innerText = a.length
             aigc.train = (t) => {
@@ -395,7 +397,7 @@
             seeTop(a)
             seeWeek(a)
             seeWd(a.map(u => u.txt).join(''), k.substr ? k : `手气不错`)
-            qs(`#map`).style.setProperty('--t', '100%')
+            ;(a.length==0)? addSearch?.(a, k.substr?k: inAB.B)?.then(()=>(seeAll(a), cityData(a, map1), seeCmt(a), fzf(srch.value), qs(`#map`).style.setProperty('--t', '100%'))) : qs(`#map`).style.setProperty('--t', '100%')
             console.timeEnd('pager')
           }, (k, v, n) => {
             if (k == '台湾') v.bindTooltip(`<mark>点击以显示所有城市（慢）</mark>`)
@@ -407,7 +409,7 @@
             v.bindTooltip(`<mark>${k}</mark><br>时段总热度: ${n.toFixed(0)}` + cityPer[k])
           })
           if (g) qs(`#map`).append(g)
-        }
+        }, addSearch
 
       onMap()
       MapRect.UI(cMap, onMap)
@@ -426,10 +428,22 @@ GFW404留档. https://zh.greatfire.org#:~:text=扩大社交媒体言论自由 ht
 人权观察. https://www.hrw.org/zh-hans
 歪脑-RFA https://www.wainao.me/about/ https://cloudfront-us-east-1.images.arcpublishing.com/radiofreeasia/G4PEF2KKIFF7HFSTZRK6SRPOEM.jpg`
 
-      MapRect.logSeq().then(a => {
+      MapRect.logSeq(localStorage.csvBin?? './xcom/a.bin').then(a => {
         p = a; p.filter = f => With([], a => { for (let N = p.length, i = 0, u; i < N; i++) if (f(u = p[i], i)) a.push(u) })
         p.slice = (A, B) => (B = B < 0 ? p.length + B : B, p.filter((_, i) => A <= i && i <= B))
       })
+      let curl_J = (s, ...a) => fetch(s.reduce((u, v, i) => u+`${encodeURIComponent(a[i - 1])}${v}`)).then(r => r.json()),
+      pickRand=a=>()=>a[a.length*Math.random()|0],
+      
+      srchCT=pickRand(Object.keys(CHINA_CITIES_DB))
+
+      addSearch=async (a, filt, r)=>{
+        let dt=new Date(filt), convert = u => ({ dt: Date.parse(u.createdDate.replace(' ', 'T')) || 0, views: u.views, heat: 100, dt1: 0, id: BigInt(u.id), city: `${srchCT()} 中国`, tag: "维权", txt: u.content });
+
+        r=await (filt.substr? curl_J`https://end-gfw.com/search-tweet?keyword=${filt}` : curl_J`https://end-gfw.com/tweet?year=${dt.getFullYear()}&month=${String(dt.getMonth()+1).padStart(2,'0')}&day=${dt.getDate()}&endDay=${dt.getDate()+2}&id=whyyoutouzhele`)
+        if(r.length==0)throw "No pager"
+        a.push(...r.map(convert))
+      }
 
     })</script>
     <script type="module">
@@ -467,6 +481,7 @@ GFW404留档. https://zh.greatfire.org#:~:text=扩大社交媒体言论自由 ht
       tog = (cs, i) => e => (cs.split(' ').map(s => e.classList.toggle(s)), this.seeAll?.(p.slice((i=p.length * .03 * Math.random()), i+(i * Math.random()) ))),
       only1 = (e0, op, i = 0, cs = e0.children) => (e0.onclick = ev => { if (!i.nodeType) { op(i = cs[i]); return } op(i); op(i = ev.target) })()
     let fzf = (s, a = []) => {
+      if(s=='')return
       do { a.push(getSelection().getRangeAt(0)) } while (find(s))
       CSS.highlights.set('fzf', new Highlight(...a))
     },
@@ -953,7 +968,7 @@ GFW404留档. https://zh.greatfire.org#:~:text=扩大社交媒体言论自由 ht
     import { ByteBuffer } from 'flatbuffers';
     import { ViewList } from './xcom.js';
 
-    MapRect.logSeq = async (uBin = './xcom/a.bin', T = ViewList, idx = 'dt', BAD_GUYS = ['constructor', '__init', 'mutate_', 'bb', 'bb_pos']) => {
+    MapRect.logSeq = async (uBin, T = ViewList, idx = 'dt', BAD_GUYS = ['constructor', '__init', 'mutate_', 'bb', 'bb_pos']) => {
       let res = await (await fetch(uBin)).arrayBuffer(),
         buf = new ByteBuffer(new Uint8Array(res)),
         root = T.getRootAsViewList(buf),

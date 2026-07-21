@@ -304,5 +304,5 @@ c.MapRect = async (rwPts, rwAreaHov, onArea, pts2card = u => `<h3>${u.city}:Tag#
 
   await useEntry(map, 'idle')
   let e = qs(`#map`).style; e.setProperty('--t', '100%')
-  setTimeout(() => e.mask = 'none', 1000)
+  //加载动画 setTimeout(() => e.mask = 'none', 1000)
 }
